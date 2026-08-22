@@ -59,6 +59,7 @@ export type ScoreStats = {
   totalScore: number
   maxCombo: number
   accuracy: number
+  accuracyv2: number
   mods: string[]
   countGeki: number
   countKatu: number
@@ -66,6 +67,7 @@ export type ScoreStats = {
   count100: number
   count50: number
   countMiss: number
+  isLazer: boolean
 }
 
 export type ReplayInput = {

@@ -53,7 +53,7 @@ export function ScoreStatsPanel({
         />
         <Stat
           label="Accuracy"
-          value={`${(score.accuracy * 100).toFixed(2)}%`}
+          value={`${score.isLazer ? (score.accuracyv2 * 100).toFixed(2) : (score.accuracy * 100).toFixed(2)}%`}
           className="flex-1"
         />
         <Stat
@@ -68,17 +68,30 @@ export function ScoreStatsPanel({
         />
       </div>
       <div className="flex divide-x overflow-hidden rounded-md border bg-muted/50">
-        {(ruleset === "mania"
+        {(ruleset === "osu"
           ? [
-              { label: "300g", value: score.countGeki },
               { label: "300", value: score.count300 },
-              { label: "200", value: score.countKatu },
               { label: "100", value: score.count100 },
               { label: "50", value: score.count50 },
               { label: "Miss", value: score.countMiss },
             ] as const
-          : [
+          : ruleset === "taiko" 
+          ? [
+              { label: "300", value: score.count300 }, 
+              { label: "100", value: score.count100 },
+              { label: "Miss", value: score.countMiss },
+            ] as const
+          : ruleset === "catch" 
+          ? [
               { label: "300", value: score.count300 },
+              { label: "100", value: score.count100} , // blame peppy
+              { label: "50", value: `${score.count50} / ${score.countKatu}`},
+              { label: "Miss", value: score.countMiss}, // blame peppy
+            ] as const
+          : [
+              { label: "MAX", value: score.countGeki },
+              { label: "300", value: score.count300 },
+              { label: "200", value: score.countKatu },
               { label: "100", value: score.count100 },
               { label: "50", value: score.count50 },
               { label: "Miss", value: score.countMiss },
