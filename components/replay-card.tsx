@@ -166,7 +166,7 @@ export function ReplayCard({
               {replay.beatmap.version}]
             </a>
             <Badge variant="outline">
-              {replay.beatmap.starRating.toFixed(2)}★
+              {replay.beatmap.starRating.toFixed(2)} ★
             </Badge>
             {replay.score.maxCombo === replay.beatmap.maxCombo && (
               <Badge variant="secondary">PFC</Badge>
