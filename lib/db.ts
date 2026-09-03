@@ -313,6 +313,27 @@ export function getSkinById(id: number): SkinRow | null {
   ).get(id)
 }
 
+export function getSkinForReplay(
+  submitterOsuId: number,
+  skinName: string,
+): SkinRow | null {
+  const own = getDb().query<SkinRow, [number, string]>(
+    `SELECT * FROM skins
+     WHERE osu_id = ? AND name = ? COLLATE NOCASE
+     ORDER BY created_at DESC
+     LIMIT 1`,
+  ).get(submitterOsuId, skinName)
+  if (own) {
+    return own
+  }
+  return getDb().query<SkinRow, [string]>(
+    `SELECT * FROM skins
+     WHERE name = ? COLLATE NOCASE
+     ORDER BY created_at DESC
+     LIMIT 1`,
+  ).get(skinName)
+}
+
 export type SkinWithUploader = SkinRow & { uploader_username: string }
 
 export function listSkinsByUser(osuId: number): SkinWithUploader[] {

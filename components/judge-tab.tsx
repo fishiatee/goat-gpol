@@ -15,9 +15,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { ReplayCard } from "@/components/replay-card"
+import { ReplayDownloadButton } from "@/components/replay-download-button"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { IconCheck, IconDownload, IconScale } from "@tabler/icons-react"
+import { IconCheck, IconScale } from "@tabler/icons-react"
 import { replayFromApi, type Replay } from "@/components/app-shell"
 import type { ReplayApi } from "@/lib/replay-types"
 
@@ -244,13 +245,7 @@ export function JudgeTab({ userOsuId }: { userOsuId: number }) {
               }
               actions={
                 <>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    render={<a href={`/replays/${replay.id}/file`} />}
-                  >
-                    <IconDownload />
-                  </Button>
+                  <ReplayDownloadButton replay={replay} />
                   <JudgeDialog
                     replay={replay}
                     onJudged={handleJudged}

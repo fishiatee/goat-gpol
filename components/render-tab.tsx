@@ -15,8 +15,9 @@ import {
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { ReplayCard } from "@/components/replay-card"
+import { ReplayDownloadButton } from "@/components/replay-download-button"
 import { VotingStatsDialog } from "@/components/voting-stats-dialog"
-import { IconChartBar, IconDownload, IconLink } from "@tabler/icons-react"
+import { IconChartBar, IconLink } from "@tabler/icons-react"
 import { replayFromApi, type Replay } from "@/components/app-shell"
 import type { ReplayApi } from "@/lib/replay-types"
 
@@ -216,13 +217,7 @@ export function RenderTab() {
               className={replay.videoUrl ? "opacity-60" : undefined}
               actions={
                 <>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    render={<a href={`/replays/${replay.id}/file`} />}
-                  >
-                    <IconDownload />
-                  </Button>
+                  <ReplayDownloadButton replay={replay} />
                   {replay.manual && replay.status === "render" ? (
                     <Button variant="ghost" size="icon-sm" disabled>
                       <IconChartBar />
