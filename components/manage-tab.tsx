@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -309,7 +308,6 @@ function RemoveReplayDialog({
         </p>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <DialogFooter className="mt-4">
-          <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
           <Button
             variant="destructive"
             onClick={handleRemove}
@@ -346,21 +344,24 @@ function ReplaysPanel({
                 key={replay.id}
                 as="div"
                 replay={replay}
+                showManualBadge
                 showSubmitter
               actions={
                 <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      onChangeStatus(
-                        replay,
-                        replay.status === "render" ? "pool" : "render",
-                      )
-                    }
-                  >
-                    {replay.status === "render" ? "Demote" : "Promote"}
-                  </Button>
+                  {replay.state !== "uploaded" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        onChangeStatus(
+                          replay,
+                          replay.status === "render" ? "pool" : "render",
+                        )
+                      }
+                    >
+                      {replay.status === "render" ? "Demote" : "Promote"}
+                    </Button>
+                  )}
                   <VotingStatsDialog replay={replay} />
                   <RemoveReplayDialog replay={replay} onRemove={onRemove} />
                 </>
@@ -422,7 +423,6 @@ function RemoveSkinDialog({
         </p>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <DialogFooter className="mt-4">
-          <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
           <Button
             variant="destructive"
             onClick={handleRemove}

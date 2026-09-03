@@ -60,7 +60,9 @@ function parseReplayMetadata(raw: string): ReplayMetadata | null {
       num(score.totalScore) &&
       num(score.maxCombo) &&
       num(score.accuracy) &&
+      num(score.accuracyv2) &&
       Array.isArray(score.mods) &&
+      (score.isLazer === true || score.isLazer === false) &&
       score.mods.every((m) => str(m)) &&
       num(score.countGeki) &&
       num(score.countKatu) &&

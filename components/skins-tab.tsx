@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -217,7 +216,6 @@ function SkinUploadForm({
             {progress.percent}% done ({progress.mbps.toFixed(1)}mb/s)
           </p>
         )}
-        <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
         <Button
           type="submit"
           disabled={

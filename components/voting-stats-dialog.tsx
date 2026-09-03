@@ -5,9 +5,7 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
-  DialogClose,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -118,11 +116,6 @@ export function VotingStatsDialog({ replay }: { replay: Replay }) {
             </ul>
           </div>
         )}
-        <DialogFooter className="mt-4">
-          <DialogClose render={<Button variant="outline" />}>
-            Close
-          </DialogClose>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

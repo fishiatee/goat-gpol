@@ -184,9 +184,9 @@ export async function decodeReplayFile(file: File): Promise<DecodedScore> {
 
   const ruleset = rulesetFromModeId(typeof info.rulesetId === "number" ? info.rulesetId : 0,)
 
-  var accuracyv2 = info.accuracy
+  let accuracyv2 = info.accuracy
   if (ruleset === "mania") {
-    accuracyv2=(info.countGeki*305+info.count300*300+info.countKatu*200+info.count100*100+info.count50*50)/(305*(info.countGeki+info.count300+info.countKatu+info.count100+info.count50+info.countMiss))
+    accuracyv2 = (info.countGeki * 305 + info.count300 * 300 + info.countKatu * 200 + info.count100 * 100 + info.count50 * 50) / (305 * (info.countGeki + info.count300 + info.countKatu + info.count100 + info.count50 + info.countMiss))
   }
 
   return {

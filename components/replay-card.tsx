@@ -5,11 +5,64 @@ import type { ReactNode } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { IconFile, IconTool } from "@tabler/icons-react"
+import {
+  IconClock,
+  IconFile,
+  IconLink,
+  IconSend,
+  IconTool,
+  IconX,
+} from "@tabler/icons-react"
 import { cn } from "@/lib/utils"
 import type { SkinRuleset } from "@/lib/skin-upload"
+import type { ReplayState } from "@/lib/replay-types"
 import { RULESET_META } from "@/components/ruleset-icons"
 import type { Replay, ScoreStats } from "@/components/app-shell"
+
+const STATE_META: Record<
+  ReplayState,
+  { label: string; icon: typeof IconSend; className: string }
+> = {
+  submitted: {
+    label: "Submitted",
+    icon: IconSend,
+    className: "text-muted-foreground",
+  },
+  queued: {
+    label: "Queued",
+    icon: IconClock,
+    className: "text-foreground",
+  },
+  denied: {
+    label: "Denied",
+    icon: IconX,
+    className: "text-destructive",
+  },
+  uploaded: {
+    label: "Uploaded",
+    icon: IconLink,
+    className: "text-foreground",
+  },
+}
+
+function ReplayStateIcon({ state }: { state: ReplayState }) {
+  const meta = STATE_META[state]
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            className={cn("flex shrink-0", meta.className)}
+            aria-label={meta.label}
+          />
+        }
+      >
+        <meta.icon className="size-4" />
+      </TooltipTrigger>
+      <TooltipContent side="top">{meta.label}</TooltipContent>
+    </Tooltip>
+  )
+}
 
 function Stat({
   label,
@@ -116,23 +169,29 @@ export function ReplayCard({
   badges,
   as = "li",
   showSubmitter = false,
+  showManualBadge = false,
+  showState = false,
   clip = false,
+  className,
 }: {
   replay: Replay
   actions?: ReactNode
   badges?: ReactNode
   as?: "li" | "div"
   showSubmitter?: boolean
+  showManualBadge?: boolean
+  showState?: boolean
   clip?: boolean
+  className?: string
 }) {
   return (
     <Tooltip>
       <TooltipTrigger
         render={
           as === "div" ? (
-            <div className="flex items-stretch" />
+            <div className={cn("flex items-stretch", className)} />
           ) : (
-            <li className="flex items-stretch" />
+            <li className={cn("flex items-stretch", className)} />
           )
         }
       >
@@ -159,7 +218,7 @@ export function ReplayCard({
               rel="noreferrer"
               className={cn(
                 "min-w-0 truncate text-sm font-medium hover:underline underline-offset-2",
-                clip && "max-w-[80%]",
+                clip && "max-w-[70%]",
               )}
             >
               {replay.beatmap.artist} - {replay.beatmap.title} [
@@ -171,7 +230,7 @@ export function ReplayCard({
             {replay.score.maxCombo === replay.beatmap.maxCombo && (
               <Badge variant="secondary">PFC</Badge>
             )}
-            {replay.manual && (
+            {showManualBadge && replay.manual && (
               <Tooltip>
                 <TooltipTrigger
                   render={<Badge variant="secondary" aria-label="Manual" />}
@@ -224,6 +283,11 @@ export function ReplayCard({
             <p className="text-sm text-muted-foreground">{replay.notes}</p>
           )}
         </div>
+        {showState && (
+          <div className="flex shrink-0 items-center pr-4">
+            <ReplayStateIcon state={replay.state} />
+          </div>
+        )}
         {actions && (
           <div className="flex shrink-0 items-center gap-2 px-4">{actions}</div>
         )}

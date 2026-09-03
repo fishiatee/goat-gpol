@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -32,11 +31,14 @@ import { Textarea } from "@/components/ui/textarea"
 import {
   IconExternalLink,
   IconFile,
+  IconLink,
+  IconMessageCircle,
   IconSearch,
   IconUpload,
 } from "@tabler/icons-react"
 import { decodeReplayFile, type DecodedScore } from "@/lib/replay-decode"
 import type { SkinRuleset } from "@/lib/skin-upload"
+import { cn } from "@/lib/utils"
 import { RULESET_META } from "@/components/ruleset-icons"
 import type {
   BeatmapInfo,
@@ -345,7 +347,6 @@ function ReplaySubmitForm({
             {error}
           </p>
         )}
-        <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
         <Button type="submit" disabled={!file || busy}>
           Next
         </Button>
@@ -365,6 +366,42 @@ function EmptyState() {
   )
 }
 
+function VideoCommentDialog({ comment }: { comment: string }) {
+  return (
+    <Dialog>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <DialogTrigger
+              render={
+                <Button variant="ghost" size="icon-sm" aria-label="View comment" />
+              }
+            />
+          }
+        >
+          <IconMessageCircle />
+        </TooltipTrigger>
+        <TooltipContent>View comment</TooltipContent>
+      </Tooltip>
+      <DialogContent>
+        <DialogHeader className="mb-4">
+          <DialogTitle>Comment</DialogTitle>
+        </DialogHeader>
+        <div className="max-h-48 overflow-y-auto">
+          <p className="text-sm whitespace-pre-wrap">{comment}</p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+type ReplaySubtab = "submissions" | "uploaded"
+
+const REPLAY_SUBTABS: { id: ReplaySubtab; label: string }[] = [
+  { id: "submissions", label: "Pending" },
+  { id: "uploaded", label: "Uploaded" },
+]
+
 export function ReplaysTab({
   replays,
   skins,
@@ -378,12 +415,19 @@ export function ReplaysTab({
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
+  const [subtab, setSubtab] = useState<ReplaySubtab>("submissions")
+
+  const tabbedReplays = replays.filter((replay) =>
+    subtab === "uploaded"
+      ? replay.state === "uploaded"
+      : replay.state !== "uploaded",
+  )
 
   const normalizedQuery = query.trim().toLowerCase()
   const filteredReplays =
     normalizedQuery === ""
-      ? replays
-      : replays.filter((replay) =>
+      ? tabbedReplays
+      : tabbedReplays.filter((replay) =>
           [
             replay.fileName,
             replay.notes,
@@ -431,26 +475,91 @@ export function ReplaysTab({
         </div>
       </header>
 
+      <div
+        className="mx-auto flex w-fit gap-0.5 rounded-lg bg-muted p-0.5"
+        role="tablist"
+        aria-label="Replay lists"
+      >
+        {REPLAY_SUBTABS.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            role="tab"
+            aria-selected={subtab === s.id}
+            onClick={() => setSubtab(s.id)}
+            className={cn(
+              "rounded-md px-3 py-1 text-sm font-medium transition-colors",
+              subtab === s.id
+                ? "bg-background text-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
       {replays.length === 0 ? (
         <EmptyState />
       ) : filteredReplays.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
-            <IconSearch className="size-8 text-muted-foreground" />
-            <p className="text-sm font-medium">
-              No replays match your search
-            </p>
+            {subtab === "uploaded" && normalizedQuery === "" ? (
+              <>
+                <IconLink className="size-8 text-muted-foreground" />
+                <p className="text-sm font-medium">
+                  No uploaded replays yet.
+                </p>
+              </>
+            ) : (
+              <>
+                <IconSearch className="size-8 text-muted-foreground" />
+                <p className="text-sm font-medium">
+                  No replays match your search
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       ) : (
         <ul className="flex flex-col divide-y overflow-hidden rounded-xl bg-card shadow-xs ring-1 ring-foreground/10">
-          {filteredReplays.map((replay) => (
-            <ReplayCard
-              key={replay.id}
-              replay={replay}
-              clip
-            />
-          ))}
+          {filteredReplays.map((replay) =>
+            subtab === "uploaded" && replay.videoUrl ? (
+              <ReplayCard
+                key={replay.id}
+                replay={replay}
+                clip
+                actions={
+                  <>
+                    {replay.videoComment ? (
+                      <VideoCommentDialog comment={replay.videoComment} />
+                    ) : null}
+                    <Button
+                      variant="default"
+                      size="sm"
+                      render={
+                        <a
+                          href={replay.videoUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        />
+                      }
+                    >
+                      <IconExternalLink className="size-3.5" />
+                      Watch
+                    </Button>
+                  </>
+                }
+              />
+            ) : (
+              <ReplayCard
+                key={replay.id}
+                replay={replay}
+                clip
+                showState
+              />
+            ),
+          )}
         </ul>
       )}
     </div>

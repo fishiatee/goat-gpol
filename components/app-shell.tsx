@@ -16,7 +16,7 @@ import {
   type UploadProgress,
 } from "@/lib/skin-upload"
 import { cn } from "@/lib/utils"
-import type { ReplayApi, ReplayStatus, Role, SkinApi } from "@/lib/replay-types"
+import type { ReplayApi, ReplayState, ReplayStatus, Role, SkinApi } from "@/lib/replay-types"
 
 export type Tab = "replays" | "skins" | "judge" | "render" | "manage"
 
@@ -86,6 +86,9 @@ export type Replay = ReplayInput & {
   submitter: { osuId: number; username: string }
   status: ReplayStatus
   manual: boolean
+  videoUrl: string | null
+  videoComment: string | null
+  state: ReplayState
   myJudgment: { score: number; comment: string } | null
   judgmentSummary: { count: number; average: number | null }
 }
@@ -102,6 +105,9 @@ export function replayFromApi(api: ReplayApi): Replay {
     score: { ...api.score, date: new Date(api.score.date) },
     status: api.status,
     manual: api.manual,
+    videoUrl: api.videoUrl,
+    videoComment: api.videoComment,
+    state: api.state,
     myJudgment: api.myJudgment,
     judgmentSummary: api.judgmentSummary,
     submitter: api.submitter,
@@ -136,6 +142,24 @@ export function AppShell({
       .then((data) => {
         if (!cancelled && data) {
           setLimits(data as SkinLimits)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [tab])
+
+  useEffect(() => {
+    if (tab !== "replays") {
+      return
+    }
+    let cancelled = false
+    fetch("/replays")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data) {
+          setReplays((data as ReplayApi[]).map(replayFromApi))
         }
       })
       .catch(() => {})

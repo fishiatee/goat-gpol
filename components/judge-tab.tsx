@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -162,9 +161,6 @@ function JudgeDialog({
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter className="mt-4">
-          <DialogClose render={<Button variant="outline" />}>
-            Cancel
-          </DialogClose>
           <Button onClick={handleSave} disabled={saving} className="px-4">
             {saving ? "Saving…" : "Vote"}
           </Button>
@@ -238,6 +234,7 @@ export function JudgeTab({ userOsuId }: { userOsuId: number }) {
             <ReplayCard
               key={replay.id}
               replay={replay}
+              showManualBadge
               badges={
                 replay.myJudgment ? (
                   <Badge variant="secondary" aria-label="Voted">

@@ -4,6 +4,7 @@ import path from "node:path"
 import type {
   JudgmentApi,
   ReplayApi,
+  ReplayState,
   Role,
   ReplayStatus,
 } from "@/lib/replay-types"
@@ -117,12 +118,16 @@ function migrate(db: Database) {
       score_mods TEXT NOT NULL,
       score_count_geki INTEGER NOT NULL,
       score_count_katu INTEGER NOT NULL,
-      score_count_300 INTEGER NOT NULL,
-      score_count_100 INTEGER NOT NULL,
-      score_count_50 INTEGER NOT NULL,
-      score_count_miss INTEGER NOT NULL,
-      created_at INTEGER NOT NULL
-    );
+  score_count_300 INTEGER NOT NULL,
+  score_count_100 INTEGER NOT NULL,
+  score_count_50 INTEGER NOT NULL,
+  score_count_miss INTEGER NOT NULL,
+  score_accuracyv2 REAL NOT NULL DEFAULT 0,
+  score_is_lazer INTEGER NOT NULL DEFAULT 0,
+  video_url TEXT,
+  video_comment TEXT,
+  created_at INTEGER NOT NULL
+);
 
     CREATE TABLE IF NOT EXISTS judgments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -157,6 +162,20 @@ function migrate(db: Database) {
   ensureColumn(db, "skins", "file_path", "file_path TEXT NOT NULL DEFAULT ''")
   ensureColumn(db, "skins", "rulesets", "rulesets TEXT NOT NULL DEFAULT '[]'")
   ensureColumn(db, "skins", "scroll_speed", "scroll_speed REAL")
+  ensureColumn(db, "replays", "video_url", "video_url TEXT")
+  ensureColumn(db, "replays", "video_comment", "video_comment TEXT")
+  ensureColumn(
+    db,
+    "replays",
+    "score_accuracyv2",
+    "score_accuracyv2 REAL NOT NULL DEFAULT 0",
+  )
+  ensureColumn(
+    db,
+    "replays",
+    "score_is_lazer",
+    "score_is_lazer INTEGER NOT NULL DEFAULT 0",
+  )
   db.run("CREATE INDEX IF NOT EXISTS idx_sessions_osu_id ON sessions(osu_id)")
   db.run("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)")
   db.run("CREATE INDEX IF NOT EXISTS idx_replays_created_at ON replays(created_at DESC)")
@@ -355,6 +374,10 @@ export type ReplayRow = {
   score_count_100: number
   score_count_50: number
   score_count_miss: number
+  score_accuracyv2: number
+  score_is_lazer: number
+  video_url: string | null
+  video_comment: string | null
   created_at: number
 }
 
@@ -387,7 +410,9 @@ export type NewReplay = {
     totalScore: number
     maxCombo: number
     accuracy: number
+    accuracyv2: number
     mods: string[]
+    isLazer: boolean
     countGeki: number
     countKatu: number
     count300: number
@@ -405,11 +430,11 @@ export function insertReplay(input: NewReplay): number {
        beatmap_version, beatmap_star_rating, beatmap_max_combo, beatmap_url,
        beatmap_background_url, beatmap_cover_list_url,
        score_rank, score_osu_id, score_username, score_date, score_total, score_max_combo,
-       score_accuracy, score_mods,
+       score_accuracy, score_accuracyv2, score_mods, score_is_lazer,
        score_count_geki, score_count_katu, score_count_300, score_count_100,
        score_count_50, score_count_miss,
        created_at
-     ) VALUES (?, ?, ?, ?, ?, 'pool', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     ) VALUES (?, ?, ?, ?, ?, 'pool', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.osuId,
       "",
@@ -435,7 +460,9 @@ export function insertReplay(input: NewReplay): number {
       input.score.totalScore,
       input.score.maxCombo,
       input.score.accuracy,
+      input.score.accuracyv2,
       JSON.stringify(input.score.mods),
+      input.score.isLazer ? 1 : 0,
       input.score.countGeki,
       input.score.countKatu,
       input.score.count300,
@@ -477,6 +504,36 @@ export function findDuplicateReplay(
 
 export function updateReplayFilePath(id: number, filePath: string) {
   getDb().run("UPDATE replays SET file_path = ? WHERE id = ?", [filePath, id])
+}
+
+export function updateReplayVideoUrl(id: number, videoUrl: string | null) {
+  getDb().run("UPDATE replays SET video_url = ? WHERE id = ?", [videoUrl, id])
+}
+
+export function updateReplayVideo(
+  id: number,
+  videoUrl: string | null,
+  videoComment: string | null,
+) {
+  getDb().run("UPDATE replays SET video_url = ?, video_comment = ? WHERE id = ?", [
+    videoUrl,
+    videoComment,
+    id,
+  ])
+}
+
+export function replayStateFromRow(
+  status: ReplayStatus,
+  manual: number,
+  videoUrl: string | null,
+): ReplayState {
+  if (videoUrl !== null && videoUrl !== "") {
+    return "uploaded"
+  }
+  if (manual === 1 && status === "pool") {
+    return "denied"
+  }
+  return status === "render" ? "queued" : "submitted"
 }
 
 export function updateReplayStatusManually(id: number, status: ReplayStatus) {
@@ -758,6 +815,9 @@ export function replayRowToApi(
     beatmapChecksum: row.beatmap_checksum,
     status: row.status,
     manual: row.manual === 1,
+    videoUrl: row.video_url,
+    videoComment: row.video_comment,
+    state: replayStateFromRow(row.status, row.manual, row.video_url),
     ruleset: row.ruleset,
     beatmap: {
       id: row.beatmap_id,
@@ -779,7 +839,9 @@ export function replayRowToApi(
       totalScore: row.score_total,
       maxCombo: row.score_max_combo,
       accuracy: row.score_accuracy,
+      accuracyv2: row.score_accuracyv2,
       mods: JSON.parse(row.score_mods) as string[],
+      isLazer: row.score_is_lazer === 1,
       countGeki: row.score_count_geki,
       countKatu: row.score_count_katu,
       count300: row.score_count_300,

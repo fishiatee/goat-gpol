@@ -2,6 +2,12 @@ export type Role = "basic" | "judge" | "admin" | "manager"
 
 export type ReplayStatus = "pool" | "render"
 
+export type ReplayState =
+  | "submitted"
+  | "queued"
+  | "denied"
+  | "uploaded"
+
 export type BeatmapApi = {
   id: number
   title: string
@@ -51,6 +57,9 @@ export type ReplayApi = ReplayMetadata & {
   submitter: { osuId: number; username: string }
   status: ReplayStatus
   manual: boolean
+  videoUrl: string | null
+  videoComment: string | null
+  state: ReplayState
   myJudgment: { score: number; comment: string } | null
   judgmentSummary: { count: number; average: number | null }
 }
