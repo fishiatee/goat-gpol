@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { HeaderSearch } from "@/components/header-search"
 import { Slider } from "@/components/ui/slider"
 import { ReplayCard } from "@/components/replay-card"
 import { RulesetIcon } from "@/components/ruleset-icons"
@@ -330,16 +331,43 @@ function ReplaysPanel({
   onChangeStatus: (replay: Replay, status: "pool" | "render") => void
   onRemove: (replay: Replay) => Promise<void>
 }) {
+  const [query, setQuery] = useState("")
+
+  const normalizedQuery = query.trim().toLowerCase()
+  const filteredReplays =
+    normalizedQuery === ""
+      ? replays
+      : replays.filter((replay) =>
+          [
+            replay.fileName,
+            replay.notes,
+            replay.skinName,
+            replay.beatmap.title,
+            replay.beatmap.artist,
+            replay.beatmap.creator,
+            replay.beatmap.version,
+            replay.score.username,
+            replay.submitter.username,
+          ].some((value) => value?.toLowerCase().includes(normalizedQuery)),
+        )
+
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="font-heading text-lg font-semibold">Replays</h2>
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="font-heading text-lg font-semibold">Replays</h2>
+        <HeaderSearch onChange={setQuery} />
+      </div>
       <div className="flex flex-col divide-y overflow-hidden rounded-xl bg-card shadow-xs ring-1 ring-foreground/10">
         {replays.length === 0 ? (
           <p className="px-4 py-3 text-sm text-muted-foreground">
             No replays submitted yet.
           </p>
+        ) : filteredReplays.length === 0 ? (
+          <p className="px-4 py-3 text-sm text-muted-foreground">
+            No replays match your search.
+          </p>
         ) : (
-          replays.map((replay) => (
+          filteredReplays.map((replay) => (
               <ReplayCard
                 key={replay.id}
                 as="div"
@@ -550,18 +578,37 @@ function SkinsPanel({
   limitsSection: ReactNode
   onRemove: (skin: Skin) => Promise<void>
 }) {
+  const [query, setQuery] = useState("")
+
+  const normalizedQuery = query.trim().toLowerCase()
+  const filteredSkins =
+    normalizedQuery === ""
+      ? skins
+      : skins.filter((skin) =>
+          [skin.name, skin.submitter.username].some((value) =>
+            value.toLowerCase().includes(normalizedQuery),
+          ),
+        )
+
   return (
     <section className="flex flex-col gap-3">
       <h2 className="font-heading text-lg font-semibold">Skins</h2>
       {limitsSection}
-      <h3 className="font-heading text-base font-semibold">Uploaded</h3>
+      <div className="flex items-center justify-between gap-4">
+        <h3 className="font-heading text-base font-semibold">Uploaded</h3>
+        <HeaderSearch onChange={setQuery} />
+      </div>
       <div className="flex flex-col divide-y overflow-hidden rounded-xl bg-card shadow-xs ring-1 ring-foreground/10">
         {skins.length === 0 ? (
           <p className="px-4 py-3 text-sm text-muted-foreground">
             No skins uploaded yet.
           </p>
+        ) : filteredSkins.length === 0 ? (
+          <p className="px-4 py-3 text-sm text-muted-foreground">
+            No skins match your search.
+          </p>
         ) : (
-          skins.map((skin) => (
+          filteredSkins.map((skin) => (
             <div
               key={skin.id}
               className="flex items-center justify-between gap-3 px-4 py-3"
