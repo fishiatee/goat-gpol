@@ -36,6 +36,7 @@ import {
   IconUpload,
 } from "@tabler/icons-react"
 import type { SkinLimits } from "@/lib/judging"
+import { matchesSkinFilters, parseSearchQuery } from "@/lib/search-filters"
 import type { SkinRuleset, UploadProgress } from "@/lib/skin-upload"
 import { cn } from "@/lib/utils"
 import {
@@ -267,15 +268,19 @@ export function SkinsTab({
   const limitReached =
     canSubmit && skins.length >= skinLimits.maxSkinsPerUser
 
-  const normalizedQuery = query.trim().toLowerCase()
-  const filteredSkins =
-    normalizedQuery === ""
-      ? skins
-      : skins.filter((skin) =>
-          [skin.name, skin.submitter.username].some((value) =>
-            value.toLowerCase().includes(normalizedQuery),
-          ),
-        )
+  const parsedQuery = parseSearchQuery(query)
+  const normalizedText = parsedQuery.text.trim().toLowerCase()
+  const filteredSkins = skins.filter((skin) => {
+    if (!matchesSkinFilters(skin, parsedQuery)) {
+      return false
+    }
+    if (normalizedText === "") {
+      return true
+    }
+    return [skin.name, skin.submitter.username].some((value) =>
+      value.toLowerCase().includes(normalizedText),
+    )
+  })
 
   const handleUpload = async (
     name: string,
@@ -298,7 +303,7 @@ export function SkinsTab({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <HeaderSearch onChange={setQuery} />
+          <HeaderSearch onChange={setQuery} context="skins" />
           {canSubmit ? (
             <Dialog open={open} onOpenChange={setOpen}>
               <Tooltip>

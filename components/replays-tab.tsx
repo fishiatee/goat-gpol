@@ -37,6 +37,7 @@ import {
   IconUpload,
 } from "@tabler/icons-react"
 import { decodeReplayFile, type DecodedScore } from "@/lib/replay-decode"
+import { matchesReplayFilters, parseSearchQuery } from "@/lib/search-filters"
 import type { SkinRuleset } from "@/lib/skin-upload"
 import { cn } from "@/lib/utils"
 import { RULESET_META } from "@/components/ruleset-icons"
@@ -424,21 +425,26 @@ export function ReplaysTab({
   )
 
   const normalizedQuery = query.trim().toLowerCase()
-  const filteredReplays =
-    normalizedQuery === ""
-      ? tabbedReplays
-      : tabbedReplays.filter((replay) =>
-          [
-            replay.fileName,
-            replay.notes,
-            replay.skinName,
-            replay.beatmap.title,
-            replay.beatmap.artist,
-            replay.beatmap.creator,
-            replay.beatmap.version,
-            replay.score.username,
-          ].some((value) => value?.toLowerCase().includes(normalizedQuery)),
-        )
+  const parsedQuery = parseSearchQuery(query)
+  const normalizedText = parsedQuery.text.trim().toLowerCase()
+  const filteredReplays = tabbedReplays.filter((replay) => {
+    if (!matchesReplayFilters(replay, parsedQuery)) {
+      return false
+    }
+    if (normalizedText === "") {
+      return true
+    }
+    return [
+      replay.fileName,
+      replay.notes,
+      replay.skinName,
+      replay.beatmap.title,
+      replay.beatmap.artist,
+      replay.beatmap.creator,
+      replay.beatmap.version,
+      replay.score.username,
+    ].some((value) => value?.toLowerCase().includes(normalizedText))
+  })
 
   return (
     <div className="flex flex-col gap-6">
@@ -450,7 +456,7 @@ export function ReplaysTab({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <HeaderSearch onChange={setQuery} />
+          <HeaderSearch onChange={setQuery} context="replays" />
           {canSubmit ? (
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger render={<Button />}>

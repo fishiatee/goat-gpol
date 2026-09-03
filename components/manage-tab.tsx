@@ -16,6 +16,11 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { HeaderSearch } from "@/components/header-search"
+import {
+  matchesReplayFilters,
+  matchesSkinFilters,
+  parseSearchQuery,
+} from "@/lib/search-filters"
 import { Slider } from "@/components/ui/slider"
 import { ReplayCard } from "@/components/replay-card"
 import { RulesetIcon } from "@/components/ruleset-icons"
@@ -333,29 +338,33 @@ function ReplaysPanel({
 }) {
   const [query, setQuery] = useState("")
 
-  const normalizedQuery = query.trim().toLowerCase()
-  const filteredReplays =
-    normalizedQuery === ""
-      ? replays
-      : replays.filter((replay) =>
-          [
-            replay.fileName,
-            replay.notes,
-            replay.skinName,
-            replay.beatmap.title,
-            replay.beatmap.artist,
-            replay.beatmap.creator,
-            replay.beatmap.version,
-            replay.score.username,
-            replay.submitter.username,
-          ].some((value) => value?.toLowerCase().includes(normalizedQuery)),
-        )
+  const parsedQuery = parseSearchQuery(query)
+  const normalizedText = parsedQuery.text.trim().toLowerCase()
+  const filteredReplays = replays.filter((replay) => {
+    if (!matchesReplayFilters(replay, parsedQuery)) {
+      return false
+    }
+    if (normalizedText === "") {
+      return true
+    }
+    return [
+      replay.fileName,
+      replay.notes,
+      replay.skinName,
+      replay.beatmap.title,
+      replay.beatmap.artist,
+      replay.beatmap.creator,
+      replay.beatmap.version,
+      replay.score.username,
+      replay.submitter.username,
+    ].some((value) => value?.toLowerCase().includes(normalizedText))
+  })
 
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-4">
         <h2 className="font-heading text-lg font-semibold">Replays</h2>
-        <HeaderSearch onChange={setQuery} />
+        <HeaderSearch onChange={setQuery} context="replays" admin />
       </div>
       <div className="flex flex-col divide-y overflow-hidden rounded-xl bg-card shadow-xs ring-1 ring-foreground/10">
         {replays.length === 0 ? (
@@ -580,15 +589,19 @@ function SkinsPanel({
 }) {
   const [query, setQuery] = useState("")
 
-  const normalizedQuery = query.trim().toLowerCase()
-  const filteredSkins =
-    normalizedQuery === ""
-      ? skins
-      : skins.filter((skin) =>
-          [skin.name, skin.submitter.username].some((value) =>
-            value.toLowerCase().includes(normalizedQuery),
-          ),
-        )
+  const parsedQuery = parseSearchQuery(query)
+  const normalizedText = parsedQuery.text.trim().toLowerCase()
+  const filteredSkins = skins.filter((skin) => {
+    if (!matchesSkinFilters(skin, parsedQuery)) {
+      return false
+    }
+    if (normalizedText === "") {
+      return true
+    }
+    return [skin.name, skin.submitter.username].some((value) =>
+      value.toLowerCase().includes(normalizedText),
+    )
+  })
 
   return (
     <section className="flex flex-col gap-3">
@@ -596,7 +609,7 @@ function SkinsPanel({
       {limitsSection}
       <div className="flex items-center justify-between gap-4">
         <h3 className="font-heading text-base font-semibold">Uploaded</h3>
-        <HeaderSearch onChange={setQuery} />
+        <HeaderSearch onChange={setQuery} context="skins" admin />
       </div>
       <div className="flex flex-col divide-y overflow-hidden rounded-xl bg-card shadow-xs ring-1 ring-foreground/10">
         {skins.length === 0 ? (
