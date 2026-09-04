@@ -30,7 +30,7 @@ export function SiteNav({
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-4 px-4">
         <span className="font-heading text-lg font-semibold tracking-tight">gpol</span>
-        <nav className="flex items-center gap-1 rounded-full bg-muted p-1">
+        <nav className="flex items-center gap-1">
           {tabs.map((t) => (
             <button
               key={t.id}
@@ -41,7 +41,7 @@ export function SiteNav({
               className={cn(
                 "rounded-full px-4 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                 tab === t.id
-                  ? "bg-background text-foreground shadow-xs"
+                  ? "bg-muted text-foreground"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >

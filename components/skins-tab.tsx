@@ -32,7 +32,6 @@ import {
   IconChevronDown,
   IconDownload,
   IconPalette,
-  IconSearch,
   IconUpload,
 } from "@tabler/icons-react"
 import type { SkinLimits } from "@/lib/judging"
@@ -237,9 +236,8 @@ function SkinUploadForm({
 function EmptyState() {
   return (
     <Card>
-      <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
-        <IconPalette className="size-8 text-muted-foreground" />
-        <p className="text-sm font-medium">No skins yet</p>
+      <CardContent className="py-10 text-center text-sm">
+        No skins
       </CardContent>
     </Card>
   )
@@ -338,9 +336,8 @@ export function SkinsTab({
         <EmptyState />
       ) : filteredSkins.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
-            <IconSearch className="size-8 text-muted-foreground" />
-            <p className="text-sm font-medium">No skins match your search</p>
+          <CardContent className="py-10 text-center text-sm">
+            Not found
           </CardContent>
         </Card>
       ) : (

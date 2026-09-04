@@ -375,11 +375,11 @@ function ReplaysPanel({
       <div className="flex flex-col divide-y overflow-hidden rounded-xl bg-card shadow-xs ring-1 ring-foreground/10">
         {replays.length === 0 ? (
           <p className="px-4 py-3 text-sm text-muted-foreground">
-            No replays submitted yet.
+            No replays
           </p>
         ) : filteredReplays.length === 0 ? (
           <p className="px-4 py-3 text-sm text-muted-foreground">
-            No replays match your search.
+            Not found
           </p>
         ) : (
           filteredReplays.map((replay) => (
@@ -821,11 +821,11 @@ function SkinsPanel({
       <div className="flex flex-col divide-y overflow-hidden rounded-xl bg-card shadow-xs ring-1 ring-foreground/10">
         {skins.length === 0 ? (
           <p className="px-4 py-3 text-sm text-muted-foreground">
-            No skins uploaded yet.
+            No skins
           </p>
         ) : filteredSkins.length === 0 ? (
           <p className="px-4 py-3 text-sm text-muted-foreground">
-            No skins match your search.
+            Not found
           </p>
         ) : (
           filteredSkins.map((skin) => (

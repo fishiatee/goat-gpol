@@ -38,7 +38,7 @@ export function LoginPage({ authError }: { authError?: string }) {
       <div className="flex w-full max-w-sm flex-col items-center gap-6 text-center">
         <p className="text-balance text-xl font-medium">haiiiii :3</p>
         <p className="text-balance text-sm text-muted-foreground">
-          authenticate with ur osu account to start gpol&apos;ing idk :waduh:
+          login with ur osu account to start idk :waduh:
         </p>
         {displayError && <p className="text-sm text-destructive">{displayError}</p>}
         <Button onClick={handleLogin} disabled={loading} className="w-full">

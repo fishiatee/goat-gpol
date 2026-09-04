@@ -204,7 +204,7 @@ export function RenderTab() {
       ) : replays.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-sm font-medium">
-            No replays in the render pool yet.
+            None yet
           </CardContent>
         </Card>
       ) : (

@@ -30,10 +30,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import {
   IconExternalLink,
-  IconFile,
-  IconLink,
   IconMessageCircle,
-  IconSearch,
   IconUpload,
 } from "@tabler/icons-react"
 import { decodeReplayFile, type DecodedScore } from "@/lib/replay-decode"
@@ -336,6 +333,7 @@ function ReplaySubmitForm({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="goated score frfr"
+            className="resize-none"
           />
         </div>
         {busy && (
@@ -359,9 +357,8 @@ function ReplaySubmitForm({
 function EmptyState() {
   return (
     <Card>
-      <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
-        <IconFile className="size-8 text-muted-foreground" />
-        <p className="text-sm font-medium">No replays yet</p>
+      <CardContent className="py-10 text-center text-sm">
+        No replays
       </CardContent>
     </Card>
   )
@@ -424,7 +421,6 @@ export function ReplaysTab({
       : replay.state !== "uploaded",
   )
 
-  const normalizedQuery = query.trim().toLowerCase()
   const parsedQuery = parseSearchQuery(query)
   const normalizedText = parsedQuery.text.trim().toLowerCase()
   const filteredReplays = tabbedReplays.filter((replay) => {
@@ -509,22 +505,8 @@ export function ReplaysTab({
         <EmptyState />
       ) : filteredReplays.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
-            {subtab === "uploaded" && normalizedQuery === "" ? (
-              <>
-                <IconLink className="size-8 text-muted-foreground" />
-                <p className="text-sm font-medium">
-                  No uploaded replays yet.
-                </p>
-              </>
-            ) : (
-              <>
-                <IconSearch className="size-8 text-muted-foreground" />
-                <p className="text-sm font-medium">
-                  No replays match your search
-                </p>
-              </>
-            )}
+          <CardContent className="py-10 text-center text-sm">
+            Not found
           </CardContent>
         </Card>
       ) : (

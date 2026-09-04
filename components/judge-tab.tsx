@@ -226,7 +226,7 @@ export function JudgeTab({ userOsuId }: { userOsuId: number }) {
       ) : replays.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-sm font-medium">
-            No replays in the pool yet.
+            None yet
           </CardContent>
         </Card>
       ) : (
