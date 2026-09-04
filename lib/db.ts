@@ -11,9 +11,11 @@ import type {
 import {
   DEFAULT_JUDGE_SETTINGS,
   DEFAULT_SKIN_LIMITS,
+  DEFAULT_WEBHOOK_SETTINGS,
   statusFromJudgments,
   type JudgeSettings,
   type SkinLimits,
+  type WebhookSettings,
 } from "@/lib/judging"
 
 export type UserRow = {
@@ -747,6 +749,59 @@ export function updateSkinLimits(partial: Partial<SkinLimits>) {
       `INSERT INTO settings (key, value) VALUES (?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
       [key, String(value)],
+    )
+  }
+}
+
+export function getWebhookSettings(): WebhookSettings {
+  const rows = getDb().query<{ key: string; value: string }, []>(
+    "SELECT key, value FROM settings",
+  ).all()
+  const map = new Map(rows.map((r) => [r.key, r.value]))
+  const rawEnabled = map.get("renderWebhookEnabled")
+  const rawUrl = map.get("renderWebhookUrl")
+  const rawFormat = map.get("renderWebhookMessageFormat")
+  return {
+    renderWebhookEnabled:
+      rawEnabled === "1" ||
+      rawEnabled?.toLowerCase() === "true"
+        ? true
+        : (rawEnabled === undefined
+          ? DEFAULT_WEBHOOK_SETTINGS.renderWebhookEnabled
+          : false),
+    renderWebhookUrl:
+      rawUrl !== undefined && rawUrl !== ""
+        ? rawUrl
+        : DEFAULT_WEBHOOK_SETTINGS.renderWebhookUrl,
+    renderWebhookMessageFormat:
+      rawFormat !== undefined && rawFormat !== ""
+        ? rawFormat
+        : DEFAULT_WEBHOOK_SETTINGS.renderWebhookMessageFormat,
+  }
+}
+
+export function updateWebhookSettings(partial: Partial<WebhookSettings>) {
+  const entries: [string, string][] = []
+  if (partial.renderWebhookEnabled !== undefined) {
+    entries.push([
+      "renderWebhookEnabled",
+      partial.renderWebhookEnabled ? "1" : "0",
+    ])
+  }
+  if (partial.renderWebhookUrl !== undefined) {
+    entries.push([
+      "renderWebhookUrl",
+      partial.renderWebhookUrl ?? "",
+    ])
+  }
+  if (partial.renderWebhookMessageFormat !== undefined) {
+    entries.push(["renderWebhookMessageFormat", partial.renderWebhookMessageFormat])
+  }
+  for (const [key, value] of entries) {
+    getDb().run(
+      `INSERT INTO settings (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      [key, value],
     )
   }
 }

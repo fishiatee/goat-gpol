@@ -4,11 +4,16 @@ import { NextRequest } from "next/server"
 import {
   deleteReplayRow,
   getReplayById,
+  getWebhookSettings,
   replayToApiForViewer,
   updateReplayStatusManually,
   updateReplayVideo,
   updateReplayVideoUrl,
 } from "@/lib/db"
+import {
+  isValidWebhookUrl,
+  sendRenderUploadedWebhook,
+} from "@/lib/discord-webhooks"
 import { getSessionUser } from "@/lib/session"
 import { canAdmin, canJudge } from "@/lib/roles"
 import type { ReplayStatus } from "@/lib/replay-types"
@@ -48,6 +53,8 @@ export async function PATCH(
     return Response.json({ error: "invalid body" }, { status: 400 })
   }
 
+  let attachedVideoUrl: string | null = null
+  let attachedVideoComment: string | null = replay.video_comment ?? null
   if (body.videoUrl !== undefined || body.videoComment !== undefined) {
     let videoUrl: string | null = replay.video_url
     let videoComment: string | null = replay.video_comment ?? null
@@ -64,6 +71,8 @@ export async function PATCH(
         }
         if (videoUrl === "") {
           videoUrl = null
+        } else {
+          attachedVideoUrl = videoUrl
         }
       } else if (body.videoUrl !== null) {
         return Response.json({ error: "invalid video url" }, { status: 400 })
@@ -87,6 +96,27 @@ export async function PATCH(
       updateReplayVideoUrl(replay.id, videoUrl)
     } else {
       updateReplayVideo(replay.id, videoUrl, videoComment)
+    }
+    attachedVideoComment = videoComment
+  }
+
+  if (attachedVideoUrl !== null) {
+    try {
+      const webhook = getWebhookSettings()
+      if (
+        webhook.renderWebhookEnabled &&
+        webhook.renderWebhookUrl &&
+        isValidWebhookUrl(webhook.renderWebhookUrl)
+      ) {
+        await sendRenderUploadedWebhook(
+          webhook.renderWebhookUrl,
+          attachedVideoUrl,
+          attachedVideoComment,
+          webhook.renderWebhookMessageFormat,
+        )
+      }
+    } catch {
+      // Webhook delivery must never fail the attach request.
     }
   }
 

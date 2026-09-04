@@ -20,7 +20,19 @@ export const DEFAULT_SKIN_LIMITS: SkinLimits = {
   maxSkinSizeMb: 50,
 }
 
-export type AppSettings = JudgeSettings & SkinLimits
+export type WebhookSettings = {
+  renderWebhookEnabled: boolean
+  renderWebhookUrl: string | null
+  renderWebhookMessageFormat: string
+}
+
+export const DEFAULT_WEBHOOK_SETTINGS: WebhookSettings = {
+  renderWebhookEnabled: false,
+  renderWebhookUrl: null,
+  renderWebhookMessageFormat: "**New video upload!!**\n$url\n\n*$comment*\n\n@YouTube Video",
+}
+
+export type AppSettings = JudgeSettings & SkinLimits & WebhookSettings
 
 export function statusFromJudgments(
   scores: number[],

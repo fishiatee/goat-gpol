@@ -32,17 +32,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { VotingStatsDialog } from "@/components/voting-stats-dialog"
 import {
+  IconDeviceFloppy,
   IconDownload,
   IconFileMusic,
+  IconInfoCircle,
   IconPalette,
   IconSettings,
   IconTrash,
   IconUserCheck,
   IconUserOff,
   IconUsers,
+  IconWebhook,
 } from "@tabler/icons-react"
 import type { Icon } from "@tabler/icons-react"
 import { cn } from "@/lib/utils"
@@ -56,6 +60,7 @@ import {
 import type { ReplayApi } from "@/lib/replay-types"
 import {
   DEFAULT_SKIN_LIMITS,
+  DEFAULT_WEBHOOK_SETTINGS,
   type AppSettings,
   type JudgeSettings,
   type SkinLimits,
@@ -70,13 +75,14 @@ type ManageUser = {
   bannedAt: number | null
 }
 
-type ManageSection = "thresholds" | "users" | "replays" | "skins"
+type ManageSection = "thresholds" | "users" | "replays" | "skins" | "webhooks"
 
 const MANAGE_SECTIONS: { id: ManageSection; label: string; icon: Icon }[] = [
   { id: "thresholds", label: "Thresholds", icon: IconSettings },
   { id: "users", label: "Users", icon: IconUsers },
   { id: "replays", label: "Replays", icon: IconFileMusic },
   { id: "skins", label: "Skins", icon: IconPalette },
+  { id: "webhooks", label: "Webhooks", icon: IconWebhook },
 ]
 
 function RoleSelect({
@@ -578,6 +584,207 @@ function SkinLimitsSection({
   )
 }
 
+function WebhooksPanel({
+  settings,
+  onUpdate,
+}: {
+  settings: AppSettings | null
+  onUpdate: (settings: AppSettings) => void
+}) {
+  const enabled = settings?.renderWebhookEnabled ?? false
+  const [urlEdit, setUrlEdit] = useState<string | null>(null)
+  const urlDraft = urlEdit ?? settings?.renderWebhookUrl ?? ""
+  const serverFormat =
+    settings?.renderWebhookMessageFormat ??
+    DEFAULT_WEBHOOK_SETTINGS.renderWebhookMessageFormat
+  const [formatEdit, setFormatEdit] = useState<string | null>(null)
+  const formatDraft = formatEdit ?? serverFormat
+  const [formatError, setFormatError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (formatDraft === serverFormat) {
+      return
+    }
+    const timer = setTimeout(() => {
+      fetch("/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ renderWebhookMessageFormat: formatDraft }),
+      })
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error("save-failed")
+          }
+          return res.json()
+        })
+        .then((data) => onUpdate(data as AppSettings))
+        .catch(() => {
+          setFormatError("Could not save the message format.")
+        })
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [formatDraft, serverFormat, onUpdate])
+  const [toggling, setToggling] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+
+  const handleToggle = async (checked: boolean) => {
+    setToggling(true)
+    setError(null)
+    setSaved(false)
+    try {
+      const res = await fetch("/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ renderWebhookEnabled: checked }),
+      })
+      if (!res.ok) {
+        throw new Error("save-failed")
+      }
+      onUpdate((await res.json()) as AppSettings)
+    } catch {
+      setError("Could not update the webhook setting.")
+    } finally {
+      setToggling(false)
+    }
+  }
+
+  const handleSave = async () => {
+    if (saving || urlDraft.trim() === "") {
+      return
+    }
+    setSaving(true)
+    setError(null)
+    setSaved(false)
+    try {
+      const res = await fetch("/settings/webhooks/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: urlDraft.trim() }),
+      })
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as {
+          error?: string
+        } | null
+        throw new Error(body?.error ?? "save-failed")
+      }
+      onUpdate((await res.json()) as AppSettings)
+      setUrlEdit(null)
+      setSaved(true)
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message === "invalid webhook url"
+          ? "That does not look like a valid Discord webhook URL."
+          : "Could not send the test message. Check the URL and try again.",
+      )
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="font-heading text-lg font-semibold">Webhooks</h2>
+      <h3 className="font-heading text-base font-semibold">Render</h3>
+      <div className="flex flex-col gap-4 rounded-xl bg-card p-4 shadow-xs ring-1 ring-foreground/10">
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            checked={enabled}
+            disabled={toggling}
+            onChange={(e) => handleToggle(e.target.checked)}
+            className="size-4 shrink-0 accent-primary"
+          />
+          Send webhook when attached
+        </label>
+        {enabled && (
+          <>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="render-webhook-url" className="text-sm font-medium">
+                Webhook URL
+              </label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="render-webhook-url"
+                  type="text"
+                  inputMode="url"
+                  placeholder="https://discord.com/api/webhooks/…"
+                  value={urlDraft}
+                  onChange={(e) => {
+                    setUrlEdit(e.target.value)
+                    setSaved(false)
+                  }}
+                />
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        disabled={urlDraft.trim() === "" || saving}
+                        onClick={handleSave}
+                        aria-label="Save"
+                      />
+                    }
+                  >
+                    <IconDeviceFloppy />
+                  </TooltipTrigger>
+                  <TooltipContent>Save</TooltipContent>
+                </Tooltip>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1.5">
+                <label
+                  htmlFor="render-webhook-format"
+                  className="text-sm font-medium"
+                >
+                  Template
+                </label>
+                <Tooltip>
+                  <TooltipTrigger render={<span className="inline-flex" />}>
+                    <IconInfoCircle className="size-3.5 text-muted-foreground" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Placeholders: $url (video URL) and $comment (comment, if
+                    provided)
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <Textarea
+                id="render-webhook-format"
+                rows={4}
+                maxLength={2000}
+                value={formatDraft}
+                onChange={(e) => {
+                  setFormatEdit(e.target.value)
+                  setFormatError(null)
+                }}
+                className="resize-none overflow-y-auto"
+                style={{
+                  fieldSizing: "content",
+                  minHeight: "calc(4lh + 1rem + 2px)",
+                  maxHeight: "calc(5lh + 1rem + 2px)",
+                }}
+              />
+              {formatError && (
+                <p className="text-sm text-destructive">{formatError}</p>
+              )}
+            </div>
+          </>
+        )}
+        {saved && (
+          <p className="text-sm text-muted-foreground">
+            Test message sent and webhook saved.
+          </p>
+        )}
+        {error && <p className="text-sm text-destructive">{error}</p>}
+      </div>
+    </section>
+  )
+}
+
 function SkinsPanel({
   skins,
   limitsSection,
@@ -927,6 +1134,9 @@ export function ManageTab({ user }: { user: SessionUser }) {
                 }
                 onRemove={removeSkin}
               />
+            )}
+            {section === "webhooks" && (
+              <WebhooksPanel settings={settings} onUpdate={setSettings} />
             )}
           </div>
         </div>
