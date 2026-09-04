@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import { Geist_Mono } from "next/font/google"
 import localFont from "next/font/local"
 
@@ -23,6 +24,10 @@ const fontMono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
 })
+
+export const metadata: Metadata = {
+  title: "goat-gpol",
+}
 
 export default function RootLayout({
   children,
