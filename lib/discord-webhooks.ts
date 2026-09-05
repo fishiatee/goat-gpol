@@ -38,8 +38,6 @@ export function renderWebhookMessage(
   const comment = (videoComment?.trim() ?? "").slice(0, 1500)
   let lines = template.split("\n")
   if (comment === "") {
-    // Drop lines that only held the $comment placeholder (plus markdown
-    // markers), so no stray empty `**` line is sent when there's no comment.
     lines = lines.filter((line) => {
       if (!line.includes("$comment")) {
         return true
@@ -48,9 +46,6 @@ export function renderWebhookMessage(
       return rest !== "" && !/^[*_~`]+$/.test(rest)
     })
   }
-  // split/join avoids `$`-pattern pitfalls of String.replace with user content.
-  // Wrap the URL in <> so Discord doesn't generate an auto-embed preview.
-  // Tolerate templates that already wrap the placeholder.
   const wrappedUrl = `<${videoUrl}>`
   return lines
     .join("\n")
@@ -128,8 +123,6 @@ export function replayWebhookMessage(
   const comment = (data.comment?.trim() ?? "").slice(0, 1500)
   let lines = template.split("\n")
   if (comment === "") {
-    // Drop lines that only held the $comment placeholder (plus markdown
-    // markers), so no stray empty line is sent when there's no comment.
     lines = lines.filter((line) => {
       if (!line.includes("$comment")) {
         return true
@@ -165,17 +158,11 @@ export function replayWebhookMessage(
     $count_miss: String(data.countMiss),
     $pfc: data.comboMax === data.comboMapMax ? "(PFC)" : "",
   }
-  // Replace longest placeholders first so prefixes (e.g. $score in
-  // $score_date, $combo_max in $combo_map_max) don't corrupt each other.
   const keys = Object.keys(replacements).sort((a, b) => b.length - a.length)
-  // URL placeholders are wrapped in <> so Discord doesn't generate
-  // auto-embed previews (the link stays clickable).
   const urlKeys = new Set(["$submitter_url", "$player_url", "$map_url"])
   let message = lines.join("\n")
   for (const key of keys) {
-    // split/join avoids `$`-pattern pitfalls of String.replace with user content.
     const value = urlKeys.has(key) ? `<${replacements[key]}>` : replacements[key]
-    // Tolerate templates that already wrap the placeholder in <>.
     message = message.split(`<${key}>`).join(value)
     message = message.split(key).join(value)
   }

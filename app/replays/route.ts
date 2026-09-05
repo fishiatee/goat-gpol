@@ -224,7 +224,6 @@ export async function POST(request: NextRequest) {
       )
     }
   } catch {
-    // Webhook delivery must never fail the submission request.
   }
   return Response.json(replayRowToApi(row, user.osu_id), { status: 201 })
 }

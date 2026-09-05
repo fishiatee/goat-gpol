@@ -116,7 +116,6 @@ export async function PATCH(
         )
       }
     } catch {
-      // Webhook delivery must never fail the attach request.
     }
   }
 

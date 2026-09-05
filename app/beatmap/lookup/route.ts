@@ -32,7 +32,6 @@ export async function GET(request: NextRequest) {
           )
           starRating = attributes.star_rating
         } catch {
-          // fall back to the base star rating when the mods are not calculable
         }
       }
       return { beatmap, starRating }
