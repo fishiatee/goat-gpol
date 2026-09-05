@@ -761,6 +761,9 @@ export function getWebhookSettings(): WebhookSettings {
   const rawEnabled = map.get("renderWebhookEnabled")
   const rawUrl = map.get("renderWebhookUrl")
   const rawFormat = map.get("renderWebhookMessageFormat")
+  const rawReplayEnabled = map.get("replayWebhookEnabled")
+  const rawReplayUrl = map.get("replayWebhookUrl")
+  const rawReplayFormat = map.get("replayWebhookMessageFormat")
   return {
     renderWebhookEnabled:
       rawEnabled === "1" ||
@@ -777,6 +780,21 @@ export function getWebhookSettings(): WebhookSettings {
       rawFormat !== undefined && rawFormat !== ""
         ? rawFormat
         : DEFAULT_WEBHOOK_SETTINGS.renderWebhookMessageFormat,
+    replayWebhookEnabled:
+      rawReplayEnabled === "1" ||
+      rawReplayEnabled?.toLowerCase() === "true"
+        ? true
+        : (rawReplayEnabled === undefined
+          ? DEFAULT_WEBHOOK_SETTINGS.replayWebhookEnabled
+          : false),
+    replayWebhookUrl:
+      rawReplayUrl !== undefined && rawReplayUrl !== ""
+        ? rawReplayUrl
+        : DEFAULT_WEBHOOK_SETTINGS.replayWebhookUrl,
+    replayWebhookMessageFormat:
+      rawReplayFormat !== undefined && rawReplayFormat !== ""
+        ? rawReplayFormat
+        : DEFAULT_WEBHOOK_SETTINGS.replayWebhookMessageFormat,
   }
 }
 
@@ -796,6 +814,21 @@ export function updateWebhookSettings(partial: Partial<WebhookSettings>) {
   }
   if (partial.renderWebhookMessageFormat !== undefined) {
     entries.push(["renderWebhookMessageFormat", partial.renderWebhookMessageFormat])
+  }
+  if (partial.replayWebhookEnabled !== undefined) {
+    entries.push([
+      "replayWebhookEnabled",
+      partial.replayWebhookEnabled ? "1" : "0",
+    ])
+  }
+  if (partial.replayWebhookUrl !== undefined) {
+    entries.push([
+      "replayWebhookUrl",
+      partial.replayWebhookUrl ?? "",
+    ])
+  }
+  if (partial.replayWebhookMessageFormat !== undefined) {
+    entries.push(["replayWebhookMessageFormat", partial.replayWebhookMessageFormat])
   }
   for (const [key, value] of entries) {
     getDb().run(

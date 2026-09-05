@@ -9,6 +9,7 @@ import {
 import {
   isValidWebhookUrl,
   sendRenderTestWebhook,
+  sendReplayTestWebhook,
 } from "@/lib/discord-webhooks"
 import { getSessionUser } from "@/lib/session"
 import { canAdmin } from "@/lib/roles"
@@ -27,7 +28,9 @@ export async function POST(request: NextRequest) {
   }
   const body = (await request.json().catch(() => null)) as {
     url?: unknown
+    kind?: unknown
   } | null
+  const kind = body?.kind === "replay" ? "replay" : "render"
   const raw = typeof body?.url === "string" ? body.url.trim() : ""
   if (
     raw === "" ||
@@ -37,11 +40,17 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "invalid webhook url" }, { status: 400 })
   }
   try {
-    await sendRenderTestWebhook(raw)
+    if (kind === "replay") {
+      await sendReplayTestWebhook(raw)
+    } else {
+      await sendRenderTestWebhook(raw)
+    }
   } catch {
     return Response.json({ error: "webhook-failed" }, { status: 502 })
   }
-  updateWebhookSettings({ renderWebhookUrl: raw })
+  updateWebhookSettings(
+    kind === "replay" ? { replayWebhookUrl: raw } : { renderWebhookUrl: raw },
+  )
   return Response.json({
     ...getJudgeSettings(),
     ...getSkinLimits(),

@@ -38,6 +38,9 @@ function parseSettings(
     renderWebhookEnabled,
     renderWebhookUrl,
     renderWebhookMessageFormat,
+    replayWebhookEnabled,
+    replayWebhookUrl,
+    replayWebhookMessageFormat,
   } = body as Record<string, unknown>
   const out: Partial<JudgeSettings> &
     Partial<SkinLimits> &
@@ -106,6 +109,39 @@ function parseSettings(
     }
     out.renderWebhookMessageFormat = renderWebhookMessageFormat
   }
+  if (replayWebhookEnabled !== undefined) {
+    if (typeof replayWebhookEnabled !== "boolean") {
+      return null
+    }
+    out.replayWebhookEnabled = replayWebhookEnabled
+  }
+  if (replayWebhookUrl !== undefined) {
+    if (replayWebhookUrl !== null && typeof replayWebhookUrl !== "string") {
+      return null
+    }
+    const trimmed =
+      typeof replayWebhookUrl === "string" ? replayWebhookUrl.trim() : ""
+    if (trimmed === "") {
+      out.replayWebhookUrl = null
+    } else {
+      if (
+        trimmed.length > MAX_WEBHOOK_URL_LENGTH ||
+        !isValidWebhookUrl(trimmed)
+      ) {
+        return null
+      }
+      out.replayWebhookUrl = trimmed
+    }
+  }
+  if (replayWebhookMessageFormat !== undefined) {
+    if (typeof replayWebhookMessageFormat !== "string") {
+      return null
+    }
+    if (replayWebhookMessageFormat.length > MAX_WEBHOOK_FORMAT_LENGTH) {
+      return null
+    }
+    out.replayWebhookMessageFormat = replayWebhookMessageFormat
+  }
   return out
 }
 
@@ -159,6 +195,15 @@ export async function PATCH(request: NextRequest) {
   }
   if (input.renderWebhookMessageFormat !== undefined) {
     webhookInput.renderWebhookMessageFormat = input.renderWebhookMessageFormat
+  }
+  if (input.replayWebhookEnabled !== undefined) {
+    webhookInput.replayWebhookEnabled = input.replayWebhookEnabled
+  }
+  if (input.replayWebhookUrl !== undefined) {
+    webhookInput.replayWebhookUrl = input.replayWebhookUrl
+  }
+  if (input.replayWebhookMessageFormat !== undefined) {
+    webhookInput.replayWebhookMessageFormat = input.replayWebhookMessageFormat
   }
   if (Object.keys(judgeInput).length > 0) {
     updateJudgeSettings(judgeInput)

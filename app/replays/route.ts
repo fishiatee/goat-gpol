@@ -5,12 +5,17 @@ import { NextRequest } from "next/server"
 import {
   findDuplicateReplay,
   getReplayById,
+  getWebhookSettings,
   insertReplay,
   listReplays,
   listReplaysByUser,
   replayRowToApi,
   updateReplayFilePath,
 } from "@/lib/db"
+import {
+  isValidWebhookUrl,
+  sendReplaySubmissionWebhook,
+} from "@/lib/discord-webhooks"
 import { withUserApi } from "@/lib/auth"
 import { getSessionUser } from "@/lib/session"
 import { canAdmin, canJudge } from "@/lib/roles"
@@ -177,6 +182,49 @@ export async function POST(request: NextRequest) {
   const row = getReplayById(id)
   if (!row) {
     return Response.json({ error: "internal error" }, { status: 500 })
+  }
+  try {
+    const webhook = getWebhookSettings()
+    if (
+      webhook.replayWebhookEnabled &&
+      webhook.replayWebhookUrl &&
+      isValidWebhookUrl(webhook.replayWebhookUrl)
+    ) {
+      await sendReplaySubmissionWebhook(
+        webhook.replayWebhookUrl,
+        {
+          submitterName: user.username,
+          submitterOsuId: user.osu_id,
+          playerName: input.score.username,
+          playerOsuId: scoreOsuId,
+          scoreDateMs: input.score.date,
+          submissionDateMs: row.created_at,
+          starRating: input.beatmap.starRating,
+          mods: input.score.mods,
+          mapName: input.beatmap.title,
+          mapArtist: input.beatmap.artist,
+          mapMapper: input.beatmap.creator,
+          mapDiff: input.beatmap.version,
+          mapUrl: input.beatmap.url,
+          comment: input.notes,
+          grade: input.score.rank,
+          score: input.score.totalScore,
+          ruleset: input.ruleset,
+          accuracy: input.score.accuracy,
+          accuracyv2: input.score.accuracyv2,
+          isLazer: input.score.isLazer,
+          comboMax: input.score.maxCombo,
+          comboMapMax: input.beatmap.maxCombo,
+          count300: input.score.count300,
+          count100: input.score.count100,
+          count50: input.score.count50,
+          countMiss: input.score.countMiss,
+        },
+        webhook.replayWebhookMessageFormat,
+      )
+    }
+  } catch {
+    // Webhook delivery must never fail the submission request.
   }
   return Response.json(replayRowToApi(row, user.osu_id), { status: 201 })
 }

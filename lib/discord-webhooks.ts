@@ -49,10 +49,15 @@ export function renderWebhookMessage(
     })
   }
   // split/join avoids `$`-pattern pitfalls of String.replace with user content.
+  // Wrap the URL in <> so Discord doesn't generate an auto-embed preview.
+  // Tolerate templates that already wrap the placeholder.
+  const wrappedUrl = `<${videoUrl}>`
   return lines
     .join("\n")
+    .split("<$url>")
+    .join(wrappedUrl)
     .split("$url")
-    .join(videoUrl)
+    .join(wrappedUrl)
     .split("$comment")
     .join(comment)
     .replace(/\n{3,}/g, "\n\n")
@@ -69,8 +74,123 @@ async function sendMessage(webhookUrl: string, content: string) {
   }
 }
 
+export type ReplayWebhookData = {
+  submitterName: string
+  submitterOsuId: number | null
+  playerName: string
+  playerOsuId: number | null
+  scoreDateMs: number
+  submissionDateMs: number
+  starRating: number
+  mods: string[]
+  mapName: string
+  mapArtist: string
+  mapMapper: string
+  mapDiff: string
+  mapUrl: string
+  comment: string | null
+  grade: string
+  score: number
+  ruleset: string
+  accuracy: number
+  accuracyv2: number
+  isLazer: boolean
+  comboMax: number
+  comboMapMax: number
+  count300: number
+  count100: number
+  count50: number
+  countMiss: number
+}
+
+const RULESET_LABELS: Record<string, string> = {
+  osu: "osu!",
+  taiko: "osu!taiko",
+  catch: "osu!catch",
+  mania: "osu!mania",
+}
+
+function profileUrl(osuId: number | null, username: string): string {
+  if (osuId !== null && Number.isFinite(osuId)) {
+    return `https://osu.ppy.sh/users/${osuId}`
+  }
+  return `https://osu.ppy.sh/users/${encodeURIComponent(username)}`
+}
+
+export function replayWebhookMessage(
+  format: string | null | undefined,
+  data: ReplayWebhookData,
+): string {
+  const template =
+    format && format.trim() !== ""
+      ? format
+      : DEFAULT_WEBHOOK_SETTINGS.replayWebhookMessageFormat
+  const comment = (data.comment?.trim() ?? "").slice(0, 1500)
+  let lines = template.split("\n")
+  if (comment === "") {
+    // Drop lines that only held the $comment placeholder (plus markdown
+    // markers), so no stray empty line is sent when there's no comment.
+    lines = lines.filter((line) => {
+      if (!line.includes("$comment")) {
+        return true
+      }
+      const rest = line.split("$comment").join("").trim()
+      return rest !== "" && !/^[*_~`]+$/.test(rest)
+    })
+  }
+  const replacements: Record<string, string> = {
+    $submitter_name: data.submitterName,
+    $submitter_url: profileUrl(data.submitterOsuId, data.submitterName),
+    $player_name: data.playerName,
+    $player_url: profileUrl(data.playerOsuId, data.playerName),
+    $score_date: String(Math.round(data.scoreDateMs / 1000)),
+    $submission_date: String(Math.round(data.submissionDateMs / 1000)),
+    $sr: data.starRating.toFixed(2),
+    $mods: data.mods.join("") || "NM",
+    $map_name: data.mapName,
+    $map_artist: data.mapArtist,
+    $map_mapper: data.mapMapper,
+    $map_diff: data.mapDiff,
+    $map_url: data.mapUrl,
+    $comment: comment,
+    $grade: data.grade,
+    $score: data.score.toLocaleString("en-US"),
+    $gamemode: RULESET_LABELS[data.ruleset] ?? data.ruleset,
+    $acc: `${((data.isLazer ? data.accuracyv2 : data.accuracy) * 100).toFixed(2)}%`,
+    $combo_max: String(data.comboMax),
+    $combo_map_max: String(data.comboMapMax),
+    $count_300: String(data.count300),
+    $count_100: String(data.count100),
+    $count_50: String(data.count50),
+    $count_miss: String(data.countMiss),
+    $pfc: data.comboMax === data.comboMapMax ? "(PFC)" : "",
+  }
+  // Replace longest placeholders first so prefixes (e.g. $score in
+  // $score_date, $combo_max in $combo_map_max) don't corrupt each other.
+  const keys = Object.keys(replacements).sort((a, b) => b.length - a.length)
+  // URL placeholders are wrapped in <> so Discord doesn't generate
+  // auto-embed previews (the link stays clickable).
+  const urlKeys = new Set(["$submitter_url", "$player_url", "$map_url"])
+  let message = lines.join("\n")
+  for (const key of keys) {
+    // split/join avoids `$`-pattern pitfalls of String.replace with user content.
+    const value = urlKeys.has(key) ? `<${replacements[key]}>` : replacements[key]
+    // Tolerate templates that already wrap the placeholder in <>.
+    message = message.split(`<${key}>`).join(value)
+    message = message.split(key).join(value)
+  }
+  return message
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/^\n+/, "")
+    .slice(0, 2000)
+}
+
 export async function sendRenderTestWebhook(webhookUrl: string) {
   await sendMessage(webhookUrl, "Installed goat-gpol render webhook!")
+}
+
+export async function sendReplayTestWebhook(webhookUrl: string) {
+  await sendMessage(webhookUrl, "Installed goat-gpol replay webhook!")
 }
 
 export async function sendRenderUploadedWebhook(
@@ -83,4 +203,12 @@ export async function sendRenderUploadedWebhook(
     webhookUrl,
     renderWebhookMessage(format, videoUrl, videoComment),
   )
+}
+
+export async function sendReplaySubmissionWebhook(
+  webhookUrl: string,
+  data: ReplayWebhookData,
+  format?: string | null,
+) {
+  await sendMessage(webhookUrl, replayWebhookMessage(format, data))
 }
