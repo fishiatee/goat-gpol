@@ -8,7 +8,7 @@ import {
   setUserRole,
 } from "@/lib/db"
 import { getSessionUser } from "@/lib/session"
-import { canAdmin, isManager } from "@/lib/roles"
+import { canAdmin, canJudge, isManager } from "@/lib/roles"
 import type { Role } from "@/lib/replay-types"
 
 export const dynamic = "force-dynamic"
@@ -123,7 +123,7 @@ export async function PATCH(request: NextRequest) {
   if (nextBannedAt !== target.banned_at) {
     setUserBanned(target.osu_id, nextBannedAt)
   }
-  if (nextRole !== target.role || nextBannedAt !== target.banned_at) {
+  if (canJudge(nextRole) !== canJudge(target.role)) {
     recomputeAllReplayStatuses()
   }
   const updated = getUserByOsuId(target.osu_id)

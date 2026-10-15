@@ -847,18 +847,22 @@ export function countEligibleJudges(): number {
 }
 
 export function recomputeReplayStatus(replayId: number) {
-  const row = getDb().query<{ locked: number }, [number]>(
-    "SELECT locked FROM replays WHERE id = ?",
+  const row = getDb().query<{ locked: number; manual: number }, [number]>(
+    "SELECT locked, manual FROM replays WHERE id = ?",
   ).get(replayId)
-  const locked = row?.locked === 1
-  const status = locked
-    ? "pool"
-    : statusFromJudgments(
-        getJudgmentScores(replayId),
-        countEligibleJudges(),
-        getJudgeSettings(),
-      )
-  getDb().run("UPDATE replays SET status = ?, manual = 0 WHERE id = ?", [
+  if (!row) {
+    return
+  }
+  // skip tainted (manually promoted/demoted) replay
+  if (row.manual === 1 || row.locked === 1) {
+    return
+  }
+  const status = statusFromJudgments(
+    getJudgmentScores(replayId),
+    countEligibleJudges(),
+    getJudgeSettings(),
+  )
+  getDb().run("UPDATE replays SET status = ? WHERE id = ?", [
     status,
     replayId,
   ])
@@ -866,7 +870,7 @@ export function recomputeReplayStatus(replayId: number) {
 
 export function recomputeAllReplayStatuses() {
   const rows = getDb().query<{ id: number }, []>(
-    "SELECT id FROM replays",
+    "SELECT id FROM replays WHERE manual = 0 AND locked = 0",
   ).all()
   for (const row of rows) {
     recomputeReplayStatus(row.id)
