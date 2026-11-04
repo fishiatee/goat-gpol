@@ -55,3 +55,9 @@ export async function deleteSession() {
   }
   cookieStore.delete(SESSION_COOKIE)
 }
+
+export async function deleteUserSessions(osuId: number) {
+  getDb().run("DELETE FROM sessions WHERE osu_id = ?", [osuId])
+  const cookieStore = await cookies()
+  cookieStore.delete(SESSION_COOKIE)
+}

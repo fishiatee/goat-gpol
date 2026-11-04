@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server"
 
-import { withUserApi } from "@/lib/auth"
+import { withUserApi, ReauthenticationRequiredError } from "@/lib/auth"
 import { getSessionUser } from "@/lib/session"
 
 export const dynamic = "force-dynamic"
@@ -48,7 +48,13 @@ export async function GET(request: NextRequest) {
       backgroundUrl: beatmap.beatmapset.covers.cover,
       coverListUrl: beatmap.beatmapset.covers.list,
     })
-  } catch {
+  } catch (error) {
+    if (error instanceof ReauthenticationRequiredError) {
+      return Response.json(
+        { error: "reauthentication-required" },
+        { status: 401 },
+      )
+    }
     return Response.json({ error: "beatmap not found" }, { status: 404 })
   }
 }

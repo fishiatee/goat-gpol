@@ -16,7 +16,7 @@ import {
   isValidWebhookUrl,
   sendReplaySubmissionWebhook,
 } from "@/lib/discord-webhooks"
-import { withUserApi } from "@/lib/auth"
+import { withUserApi, ReauthenticationRequiredError } from "@/lib/auth"
 import { getSessionUser } from "@/lib/session"
 import { canAdmin, canJudge } from "@/lib/roles"
 import type { ReplayMetadata } from "@/lib/replay-types"
@@ -140,7 +140,13 @@ export async function POST(request: NextRequest) {
       api.getUser(input.score.username),
     )
     scoreOsuId = scoreUser.id
-  } catch {
+  } catch (error) {
+    if (error instanceof ReauthenticationRequiredError) {
+      return Response.json(
+        { error: "reauthentication-required" },
+        { status: 401 },
+      )
+    }
     scoreOsuId = null
   }
 

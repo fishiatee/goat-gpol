@@ -119,6 +119,10 @@ function ReplaySubmitForm({
       const res = await fetch(
         `/beatmap/lookup?checksum=${encodeURIComponent(score.beatmapHash)}${modsParam}`,
       )
+      if (res.status === 401) {
+        window.location.href = "/?auth_error=reauthentication_required"
+        return
+      }
       if (!res.ok) {
         throw new Error("beatmap-lookup-failed")
       }

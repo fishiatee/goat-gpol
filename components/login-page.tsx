@@ -4,9 +4,10 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 
 const authErrorMessages: Record<string, string> = {
-  access_denied: "You chose not to authorize the application. Try again whenever you're ready.",
-  invalid_authorization: "The login attempt could not be verified. Please try again.",
-  authorization_failed: "osu! could not be reached during login. Please try again.",
+  reauthentication_required: "Please log in again.",
+  access_denied: "w-why...?",
+  invalid_authorization: "Please try again.",
+  authorization_failed: "Please try again later.",
 }
 
 export function LoginPage({ authError }: { authError?: string }) {

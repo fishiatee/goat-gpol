@@ -201,6 +201,10 @@ export function AppShell({
       }),
     )
     const res = await fetch("/replays", { method: "POST", body: form })
+    if (res.status === 401) {
+      window.location.href = "/?auth_error=reauthentication_required"
+      throw new Error("reauthentication-required")
+    }
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as {
         error?: string
