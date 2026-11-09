@@ -46,11 +46,14 @@ export function statusFromJudgments(
   eligibleJudges: number,
   settings: JudgeSettings,
 ): ReplayStatus {
-  if (eligibleJudges <= 0) {
+  if (eligibleJudges <= 0 || scores.length === 0) {
     return "pool"
   }
-  const good = scores.filter((s) => s > settings.thresholdScore).length
-  if (good > (eligibleJudges * settings.thresholdPercent) / 100) {
+  const average = scores.reduce((sum, score) => sum + score, 0) / scores.length
+  if (
+    scores.length >= (eligibleJudges * settings.thresholdPercent) / 100 &&
+    average >= settings.thresholdScore
+  ) {
     return "render"
   }
   return "pool"

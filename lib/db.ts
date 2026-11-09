@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite"
 import { mkdirSync } from "node:fs"
 import path from "node:path"
-import { hasPermission, legacyPermissions, userPermissions, type Permission } from "@/lib/permissions"
+import { isEligibleJudge, legacyPermissions, userPermissions, type Permission } from "@/lib/permissions"
 import type {
   JudgmentApi,
   ReplayApi,
@@ -52,6 +52,7 @@ export function getDb(): Database {
     db.exec("PRAGMA foreign_keys = ON")
     migrate(db)
     syncManagerRoleAtStartup()
+    recomputeAllReplayStatuses()
   }
   return db
 }
@@ -658,11 +659,14 @@ export type JudgmentRow = {
 export type JudgmentWithJudge = JudgmentRow & {
   judge_username: string
   judge_avatar_url: string
+  judge_role: Role
+  judge_permissions: string
 }
 
 export function listJudgments(replayId: number): JudgmentWithJudge[] {
   return getDb().query<JudgmentWithJudge, [number]>(
-    `SELECT j.*, u.username AS judge_username, u.avatar_url AS judge_avatar_url
+    `SELECT j.*, u.username AS judge_username, u.avatar_url AS judge_avatar_url,
+       u.role AS judge_role, u.permissions AS judge_permissions
      FROM judgments j
      JOIN users u ON u.osu_id = j.judge_osu_id
      WHERE j.replay_id = ?
@@ -681,6 +685,7 @@ export function judgmentToApi(judgment: JudgmentWithJudge): JudgmentApi {
     comment: judgment.comment,
     createdAt: judgment.created_at,
     updatedAt: judgment.updated_at,
+    countsTowardThreshold: isEligibleJudge({ role: judgment.judge_role, permissions: judgment.judge_permissions }),
   }
 }
 
@@ -697,16 +702,17 @@ export function getJudgmentSummary(replayId: number): {
   count: number
   average: number | null
 } {
-  const row = getDb().query<{ count: number; avg: number | null }, [number]>(
-    "SELECT COUNT(*) AS count, AVG(score) AS avg FROM judgments WHERE replay_id = ?",
-  ).get(replayId)
-  return { count: row?.count ?? 0, average: row?.avg ?? null }
+  const scores = getJudgmentScores(replayId)
+  return {
+    count: scores.length,
+    average: scores.length > 0 ? scores.reduce((sum, score) => sum + score, 0) / scores.length : null,
+  }
 }
 
 export function getJudgmentScores(replayId: number): number[] {
-  return getDb().query<{ score: number }, [number]>(
-    "SELECT score FROM judgments WHERE replay_id = ?",
-  ).all(replayId).map((r) => r.score)
+  return listJudgments(replayId)
+    .filter((judgment) => isEligibleJudge({ role: judgment.judge_role, permissions: judgment.judge_permissions }))
+    .map((judgment) => judgment.score)
 }
 
 export function getJudgeSettings(): JudgeSettings {
@@ -872,18 +878,18 @@ export function updateWebhookSettings(partial: Partial<WebhookSettings>) {
 }
 
 export function countEligibleJudges(): number {
-  return listUsers().filter((user) => hasPermission(user, "judge")).length
+  return listUsers().filter(isEligibleJudge).length
 }
 
 export function recomputeReplayStatus(replayId: number) {
-  const row = getDb().query<{ locked: number; manual: number }, [number]>(
-    "SELECT locked, manual FROM replays WHERE id = ?",
+  const row = getDb().query<{ locked: number; manual: number; video_url: string | null }, [number]>(
+    "SELECT locked, manual, video_url FROM replays WHERE id = ?",
   ).get(replayId)
   if (!row) {
     return
   }
   // skip tainted (manually promoted/demoted) replay
-  if (row.manual === 1 || row.locked === 1) {
+  if (row.manual === 1 || row.locked === 1 || row.video_url) {
     return
   }
   const status = statusFromJudgments(
@@ -899,7 +905,7 @@ export function recomputeReplayStatus(replayId: number) {
 
 export function recomputeAllReplayStatuses() {
   const rows = getDb().query<{ id: number }, []>(
-    "SELECT id FROM replays WHERE manual = 0 AND locked = 0",
+    "SELECT id FROM replays WHERE manual = 0 AND locked = 0 AND (video_url IS NULL OR video_url = '')",
   ).all()
   for (const row of rows) {
     recomputeReplayStatus(row.id)

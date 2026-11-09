@@ -183,33 +183,33 @@ function ThresholdsPanel({
       <h2 className="font-heading text-lg font-semibold">Judging thresholds</h2>
       <div className="flex flex-col gap-4 rounded-xl bg-card p-4 shadow-xs ring-1 ring-foreground/10">
         <p className="text-sm text-muted-foreground">
-          A replay moves to the Render pool when{" "}
+          Threshold: at least{" "}
           <span className="font-medium text-foreground">
-            more than {settings?.thresholdPercent ?? 50}%
+            {settings?.thresholdPercent ?? 50}%
           </span>{" "}
-          of all users allowed to judge score it above{" "}
+          have voted with an average of at least{" "}
           <span className="font-medium text-foreground">
             {settings?.thresholdScore ?? 3}
           </span>
-          .
         </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="threshold-score" className="text-sm font-medium">
-              Vote must be above
+              Minimum average score
             </label>
             <Input
               id="threshold-score"
               type="number"
               min={0}
-              max={4}
+              max={5}
+              step={0.01}
               value={scoreDraft}
               onChange={(e) => onScoreChange(e.target.value)}
             />
           </div>
           <div className="flex flex-col gap-1.5">
             <label htmlFor="threshold-percent" className="text-sm font-medium">
-              Percent of judges
+              Minimum percent of judges voting
             </label>
             <Input
               id="threshold-percent"
@@ -1060,7 +1060,7 @@ export function ManageTab({ user }: { user: SessionUser }) {
     const body: Partial<JudgeSettings> = {}
     const score = Number(scoreDraft)
     const percent = Number(percentDraft)
-    if (Number.isInteger(score)) {
+    if (scoreDraft.trim() !== "" && Number.isFinite(score)) {
       body.thresholdScore = score
     }
     if (Number.isInteger(percent)) {

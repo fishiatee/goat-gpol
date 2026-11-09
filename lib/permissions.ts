@@ -50,6 +50,10 @@ export function hasPermission(user: PermissionUser, permission: Permission): boo
   return permissions.includes("site_administration") || permissions.includes(permission)
 }
 
+export function isEligibleJudge(user: PermissionUser): boolean {
+  return hasPermission(user, "judge")
+}
+
 export const MANAGE_PERMISSIONS = {
   users: "manage_users",
   replays: "manage_replays",

@@ -48,12 +48,11 @@ function parseSettings(
   const int = (value: unknown) =>
     typeof value === "number" && Number.isInteger(value) ? value : undefined
 
-  const score = int(thresholdScore)
-  if (score !== undefined) {
-    if (score < 0 || score > 4) {
+  if (thresholdScore !== undefined) {
+    if (typeof thresholdScore !== "number" || !Number.isFinite(thresholdScore) || thresholdScore < 0 || thresholdScore > 5) {
       return null
     }
-    out.thresholdScore = score
+    out.thresholdScore = thresholdScore
   }
   const percent = int(thresholdPercent)
   if (percent !== undefined) {

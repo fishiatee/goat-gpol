@@ -19,6 +19,10 @@ export function VotingStatsDialog({ replay }: { replay: Replay }) {
   const [open, setOpen] = useState(false)
   const [judgments, setJudgments] = useState<JudgmentApi[] | null>(null)
   const [failed, setFailed] = useState(false)
+  const countedVotes = judgments?.filter((judgment) => judgment.countsTowardThreshold !== false) ?? []
+  const average = countedVotes.length > 0
+    ? countedVotes.reduce((sum, judgment) => sum + judgment.score, 0) / countedVotes.length
+    : null
 
   useEffect(() => {
     if (!open) {
@@ -78,10 +82,7 @@ export function VotingStatsDialog({ replay }: { replay: Replay }) {
                 Average Score
               </span>
               <span className="text-sm font-semibold tabular-nums">
-                {(
-                  judgments.reduce((sum, judgment) => sum + judgment.score, 0) /
-                  judgments.length
-                ).toFixed(2)}
+                {average === null ? "—" : average.toFixed(2)}
               </span>
             </div>
             <ul className="flex flex-col divide-y overflow-hidden rounded-md border">

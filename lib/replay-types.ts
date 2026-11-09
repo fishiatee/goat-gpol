@@ -65,6 +65,7 @@ export type ReplayApi = ReplayMetadata & {
 }
 
 export type JudgmentApi = {
+  countsTowardThreshold?: boolean
   id: number
   replayId: number
   judgeOsuId: number
