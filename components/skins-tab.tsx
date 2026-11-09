@@ -38,6 +38,7 @@ import type { SkinLimits } from "@/lib/judging"
 import { matchesSkinFilters, parseSearchQuery } from "@/lib/search-filters"
 import type { SkinRuleset, UploadProgress } from "@/lib/skin-upload"
 import { cn } from "@/lib/utils"
+import { MAX_SKIN_NAME_LENGTH } from "@/lib/upload-limits"
 import {
   OsuCatchIcon,
   OsuIcon,
@@ -61,6 +62,7 @@ const RULESET_OPTIONS: {
 function SkinUploadForm({
   onUpload,
   maxSkinSizeMb,
+  onUploadingChange,
 }: {
   onUpload: (
     name: string,
@@ -70,6 +72,7 @@ function SkinUploadForm({
     scrollSpeed?: number,
   ) => Promise<void>
   maxSkinSizeMb: number
+  onUploadingChange: (uploading: boolean) => void
 }) {
   const [name, setName] = useState("")
   const [file, setFile] = useState<File | null>(null)
@@ -78,7 +81,8 @@ function SkinUploadForm({
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState<UploadProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [sizeExceeded, setSizeExceeded] = useState(false)
+  const sizeExceeded = file !== null && file.size > maxSkinSizeMb * 1024 * 1024
+  const validFile = file !== null && file.size > 0 && file.name.toLowerCase().endsWith(".osk")
 
   const toggleRuleset = (id: SkinRuleset, checked: boolean) => {
     setRulesets((prev) =>
@@ -88,7 +92,9 @@ function SkinUploadForm({
 
   const handleFileChange = (picked: File | null) => {
     setFile(picked)
-    setSizeExceeded(picked !== null && picked.size > maxSkinSizeMb * 1024 * 1024)
+    setProgress(null)
+    setError(picked && (picked.size === 0 || !picked.name.toLowerCase().endsWith(".osk"))
+      ? "Choose a non-empty .osk skin file." : null)
   }
 
   const selectedLabels = RULESET_OPTIONS.filter((option) =>
@@ -97,10 +103,12 @@ function SkinUploadForm({
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!file || name.trim() === "" || uploading || rulesets.length === 0) {
+    if (!file || !validFile || sizeExceeded || name.trim() === "" || name.trim().length > MAX_SKIN_NAME_LENGTH || uploading || rulesets.length === 0) {
       return
     }
     setUploading(true)
+    onUploadingChange(true)
+    setProgress(null)
     setError(null)
     try {
       await onUpload(
@@ -116,9 +124,15 @@ function SkinUploadForm({
           ? "You have reached the maximum number of skins."
           : err instanceof Error && err.message === "file too large"
             ? "The skin file exceeds the maximum allowed size."
-            : "Could not upload the skin. Please try again.",
+            : err instanceof Error && (err.message === "invalid file type" || err.message === "invalid file size")
+              ? "Choose a valid, non-empty .osk skin archive."
+              : err instanceof Error && err.message === "skin-upload-timeout"
+                ? "The upload timed out. Check your connection and try again."
+                : "Could not upload the skin. Please try again.",
       )
+    } finally {
       setUploading(false)
+      onUploadingChange(false)
     }
   }
 
@@ -127,7 +141,7 @@ function SkinUploadForm({
       <DialogHeader>
         <DialogTitle>Upload a skin</DialogTitle>
       </DialogHeader>
-      <div className="flex flex-col gap-4">
+      <fieldset disabled={uploading} className="flex min-w-0 flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <span className="text-sm font-medium">Skin file</span>
           <FilePicker
@@ -136,6 +150,7 @@ function SkinUploadForm({
             hint="or drag and drop it here"
             fileName={file?.name ?? null}
             onFileChange={handleFileChange}
+            disabled={uploading}
           />
         </div>
         <div className="flex flex-col gap-1.5">
@@ -197,13 +212,14 @@ function SkinUploadForm({
           </label>
           <Input
             id="skin-name"
+            maxLength={MAX_SKIN_NAME_LENGTH}
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="leaked owc skin"
           />
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
-      </div>
+      </fieldset>
       <DialogFooter>
         {sizeExceeded && (
           <p className="text-sm text-destructive sm:mr-auto sm:self-center">
@@ -213,13 +229,13 @@ function SkinUploadForm({
         {uploading && progress && (
           <p className="flex items-center gap-2 text-sm text-muted-foreground sm:mr-auto">
             <Spinner />
-            {progress.percent}% done ({progress.mbps.toFixed(1)}mb/s)
+            {progress.phase === "processing" ? "Saving skin…" : `${progress.percent}% uploaded (${progress.mbps.toFixed(1)} MB/s)`}
           </p>
         )}
         <Button
           type="submit"
           disabled={
-            !file ||
+            !validFile ||
             name.trim() === "" ||
             rulesets.length === 0 ||
             uploading ||
@@ -261,6 +277,7 @@ export function SkinsTab({
   skinLimits: SkinLimits
 }) {
   const [open, setOpen] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [query, setQuery] = useState("")
 
   const limitReached =
@@ -303,7 +320,7 @@ export function SkinsTab({
         <div className="flex items-center gap-2">
           <HeaderSearch onChange={setQuery} context="skins" />
           {canSubmit ? (
-            <Dialog open={open} onOpenChange={setOpen}>
+            <Dialog open={open} onOpenChange={(next) => { if (!uploading) setOpen(next) }}>
               <Tooltip>
                 <TooltipTrigger render={<span className="inline-flex" />}>
                   <DialogTrigger render={<Button disabled={limitReached} />}>
@@ -321,6 +338,7 @@ export function SkinsTab({
                 <SkinUploadForm
                   onUpload={handleUpload}
                   maxSkinSizeMb={skinLimits.maxSkinSizeMb}
+                  onUploadingChange={setUploading}
                 />
               </DialogContent>
             </Dialog>

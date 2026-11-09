@@ -1,16 +1,15 @@
-import { mkdir, writeFile } from "node:fs/promises"
-import path from "node:path"
-import { NextRequest } from "next/server"
+import { after, NextRequest } from "next/server"
 
 import {
   findDuplicateReplay,
+  getDb,
   getReplayById,
+  getUserByOsuId,
   getWebhookSettings,
   insertReplay,
   listReplays,
   listReplaysByUser,
   replayRowToApi,
-  updateReplayFilePath,
 } from "@/lib/db"
 import {
   isValidWebhookUrl,
@@ -20,10 +19,20 @@ import { withUserApi, ReauthenticationRequiredError } from "@/lib/auth"
 import { getSessionUser } from "@/lib/session"
 import { hasPermission, isManager } from "@/lib/permissions"
 import type { ReplayMetadata } from "@/lib/replay-types"
+import { removeUpload, storeUpload, UploadError } from "@/lib/upload-storage"
 
 export const dynamic = "force-dynamic"
 
-const MAX_REPLAY_BYTES = 50 * 1024 * 1024
+const MAX_METADATA_BYTES = 256 * 1024
+
+async function readSubmission(request: NextRequest): Promise<FormData> {
+  if (!request.body) throw new UploadError("missing file or metadata", 400)
+  try {
+    return await request.formData()
+  } catch {
+    throw new UploadError("invalid form data", 400)
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -120,16 +129,24 @@ export async function POST(request: NextRequest) {
   if (user.banned_at !== null && !isManager(user)) {
     return Response.json({ error: "banned" }, { status: 403 })
   }
-  const form = await request.formData()
+  let form: FormData
+  try {
+    form = await readSubmission(request)
+  } catch (error) {
+    if (error instanceof UploadError) {
+      return Response.json({ error: error.message }, { status: error.status })
+    }
+    return Response.json({ error: "invalid form data" }, { status: 400 })
+  }
   const file = form.get("file")
   const metadata = form.get("metadata")
   if (!(file instanceof File) || typeof metadata !== "string") {
     return Response.json({ error: "missing file or metadata" }, { status: 400 })
   }
-  if (file.size === 0 || file.size > MAX_REPLAY_BYTES) {
+  if (file.size === 0) {
     return Response.json({ error: "invalid file size" }, { status: 400 })
   }
-  const input = parseReplayMetadata(metadata)
+  const input = metadata.length <= MAX_METADATA_BYTES ? parseReplayMetadata(metadata) : null
   if (!input) {
     return Response.json({ error: "invalid metadata" }, { status: 400 })
   }
@@ -168,68 +185,95 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const id = insertReplay({
-    osuId: user.osu_id,
-    fileName: input.fileName,
-    skinName: input.skinName,
-    notes: input.notes,
-    ruleset: input.ruleset,
-    beatmapChecksum: input.beatmapChecksum,
-    beatmap: input.beatmap,
-    score: { ...input.score, osuId: scoreOsuId },
-  })
-
-  const dir = path.join(process.cwd(), "data", "replays")
-  await mkdir(dir, { recursive: true })
-  const filePath = path.join(dir, `${id}.osr`)
-  await writeFile(filePath, Buffer.from(await file.arrayBuffer()))
-  updateReplayFilePath(id, filePath)
-
-  const row = getReplayById(id)
-  if (!row) {
-    return Response.json({ error: "internal error" }, { status: 500 })
-  }
+  let filePath: string | undefined
+  let row: NonNullable<ReturnType<typeof getReplayById>>
+  let committed = false
   try {
-    const webhook = getWebhookSettings()
-    if (
-      webhook.replayWebhookEnabled &&
-      webhook.replayWebhookUrl &&
-      isValidWebhookUrl(webhook.replayWebhookUrl)
-    ) {
-      await sendReplaySubmissionWebhook(
-        webhook.replayWebhookUrl,
-        {
-          submitterName: user.username,
-          submitterOsuId: user.osu_id,
-          playerName: input.score.username,
-          playerOsuId: scoreOsuId,
-          scoreDateMs: input.score.date,
-          submissionDateMs: row.created_at,
-          starRating: input.beatmap.starRating,
-          mods: input.score.mods,
-          mapName: input.beatmap.title,
-          mapArtist: input.beatmap.artist,
-          mapMapper: input.beatmap.creator,
-          mapDiff: input.beatmap.version,
-          mapUrl: input.beatmap.url,
-          comment: input.notes,
-          grade: input.score.rank,
-          score: input.score.totalScore,
-          ruleset: input.ruleset,
-          accuracy: input.score.accuracy,
-          accuracyv2: input.score.accuracyv2,
-          isLazer: input.score.isLazer,
-          comboMax: input.score.maxCombo,
-          comboMapMax: input.beatmap.maxCombo,
-          count300: input.score.count300,
-          count100: input.score.count100,
-          count50: input.score.count50,
-          countMiss: input.score.countMiss,
-        },
-        webhook.replayWebhookMessageFormat,
-      )
+    filePath = await storeUpload({
+      body: file.stream(),
+      directory: "replays",
+      extension: ".osr",
+      expectedBytes: file.size,
+      signal: request.signal,
+    })
+    const savedPath = filePath
+    row = getDb().transaction(() => {
+      const currentUser = getUserByOsuId(user.osu_id)
+      if (!currentUser) throw new UploadError("unauthorized", 401)
+      if (currentUser.banned_at !== null && !isManager(currentUser)) {
+        throw new UploadError("banned", 403)
+      }
+      const existing = findDuplicateReplay(input.beatmapChecksum, scoreOsuId, input.score.username, input.score.date)
+      if (existing) {
+        throw new UploadError(existing.osu_id === user.osu_id ? "replay-already-submitted" : "replay-submitted-by-other", 409)
+      }
+      const id = insertReplay({
+        osuId: user.osu_id,
+        fileName: input.fileName,
+        skinName: input.skinName,
+        notes: input.notes,
+        ruleset: input.ruleset,
+        beatmapChecksum: input.beatmapChecksum,
+        beatmap: input.beatmap,
+        score: { ...input.score, osuId: scoreOsuId },
+      }, savedPath)
+      const replay = getReplayById(id)
+      if (!replay) throw new Error("replay not found after insertion")
+      return replay
+    }).immediate()
+    committed = true
+  } catch (error) {
+    if (filePath && !committed) await removeUpload(filePath)
+    if (error instanceof UploadError) {
+      return Response.json({ error: error.message }, { status: error.status })
     }
-  } catch {
+    console.error("Replay submission failed", error)
+    return Response.json({ error: "upload failed" }, { status: 500 })
   }
+  after(async () => {
+    try {
+      const webhook = getWebhookSettings()
+      if (
+        webhook.replayWebhookEnabled &&
+        webhook.replayWebhookUrl &&
+        isValidWebhookUrl(webhook.replayWebhookUrl)
+      ) {
+        await sendReplaySubmissionWebhook(
+          webhook.replayWebhookUrl,
+          {
+            submitterName: user.username,
+            submitterOsuId: user.osu_id,
+            playerName: input.score.username,
+            playerOsuId: scoreOsuId,
+            scoreDateMs: input.score.date,
+            submissionDateMs: row.created_at,
+            starRating: input.beatmap.starRating,
+            mods: input.score.mods,
+            mapName: input.beatmap.title,
+            mapArtist: input.beatmap.artist,
+            mapMapper: input.beatmap.creator,
+            mapDiff: input.beatmap.version,
+            mapUrl: input.beatmap.url,
+            comment: input.notes,
+            grade: input.score.rank,
+            score: input.score.totalScore,
+            ruleset: input.ruleset,
+            accuracy: input.score.accuracy,
+            accuracyv2: input.score.accuracyv2,
+            isLazer: input.score.isLazer,
+            comboMax: input.score.maxCombo,
+            comboMapMax: input.beatmap.maxCombo,
+            count300: input.score.count300,
+            count100: input.score.count100,
+            count50: input.score.count50,
+            countMiss: input.score.countMiss,
+          },
+          webhook.replayWebhookMessageFormat,
+        )
+      }
+    } catch (error) {
+      console.error("Replay submission webhook failed", error)
+    }
+  })
   return Response.json(replayRowToApi(row, user.osu_id), { status: 201 })
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { useState, type FormEvent } from "react"
+import { useRef, useState, type FormEvent } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -60,9 +60,11 @@ type ConfirmData = {
 function ReplaySubmitForm({
   skins,
   onSubmit,
+  onSubmittingChange,
 }: {
   skins: Skin[]
   onSubmit: (input: ReplayInput, file: File) => Promise<void>
+  onSubmittingChange: (submitting: boolean) => void
 }) {
   const [file, setFile] = useState<File | null>(null)
   const [ruleset, setRuleset] = useState<SkinRuleset | null>(null)
@@ -74,22 +76,36 @@ function ReplaySubmitForm({
   const [confirm, setConfirm] = useState<ConfirmData | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const decodedRef = useRef<{ file: File; promise: Promise<DecodedScore> } | null>(null)
 
   const handleFileChange = async (picked: File | null) => {
     setFile(picked)
     setRuleset(null)
     setSkinId(DEFAULT_SKIN_ID)
+    setError(null)
+    decodedRef.current = null
     if (!picked) {
+      setDetecting(false)
+      return
+    }
+    if (!picked.name.toLowerCase().endsWith(".osr") || picked.size === 0) {
+      setError("Choose a non-empty .osr replay file.")
+      setDetecting(false)
       return
     }
     setDetecting(true)
+    const decoded = { file: picked, promise: decodeReplayFile(picked) }
+    decodedRef.current = decoded
     try {
-      const score = await decodeReplayFile(picked)
-      setRuleset(score.ruleset)
+      const score = await decoded.promise
+      if (decodedRef.current === decoded) setRuleset(score.ruleset)
     } catch {
-      setRuleset(null)
+      if (decodedRef.current === decoded) {
+        setRuleset(null)
+        setError("That file could not be decoded as an osu! replay.")
+      }
     } finally {
-      setDetecting(false)
+      if (decodedRef.current === decoded) setDetecting(false)
     }
   }
 
@@ -106,13 +122,13 @@ function ReplaySubmitForm({
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!file || busy) {
+    if (!file || busy || detecting || !ruleset || decodedRef.current?.file !== file) {
       return
     }
     setBusy(true)
     setError(null)
     try {
-      const score = await decodeReplayFile(file)
+      const score = await decodedRef.current.promise
       const modsParam = score.mods.length
         ? `&mods=${encodeURIComponent(score.mods.join(","))}`
         : ""
@@ -155,6 +171,7 @@ function ReplaySubmitForm({
       return
     }
     setSubmitting(true)
+    onSubmittingChange(true)
     setSubmitError(null)
     try {
       await onSubmit(
@@ -177,7 +194,9 @@ function ReplaySubmitForm({
             ? "This replay has already been submitted by another user."
             : "Could not submit the replay. Please try again.",
       )
+    } finally {
       setSubmitting(false)
+      onSubmittingChange(false)
     }
   }
 
@@ -256,7 +275,7 @@ function ReplaySubmitForm({
               {submitError}
             </p>
           )}
-          <Button variant="outline" onClick={() => setConfirm(null)}>
+          <Button variant="outline" disabled={submitting} onClick={() => setConfirm(null)}>
             Back
           </Button>
           <Button onClick={handleConfirmSubmit} disabled={submitting}>
@@ -272,7 +291,7 @@ function ReplaySubmitForm({
       <DialogHeader>
         <DialogTitle>Submit a replay</DialogTitle>
       </DialogHeader>
-      <div className="flex flex-col gap-4">
+      <fieldset disabled={busy} className="flex min-w-0 flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <span className="text-sm font-medium">Replay file</span>
           <FilePicker
@@ -281,6 +300,7 @@ function ReplaySubmitForm({
             hint="or drag and drop it here"
             fileName={file?.name ?? null}
             onFileChange={handleFileChange}
+            disabled={busy}
           />
           {file && detecting && (
             <p className="text-xs text-muted-foreground">
@@ -343,14 +363,14 @@ function ReplaySubmitForm({
         {busy && (
           <p className="text-sm text-muted-foreground">Decoding replay…</p>
         )}
-      </div>
+      </fieldset>
       <DialogFooter>
         {error && (
           <p className="text-sm text-destructive sm:mr-auto sm:self-center">
             {error}
           </p>
         )}
-        <Button type="submit" disabled={!file || busy}>
+        <Button type="submit" disabled={!file || busy || detecting || !ruleset}>
           Next
         </Button>
       </DialogFooter>
@@ -416,6 +436,7 @@ export function ReplaysTab({
   canSubmit: boolean
 }) {
   const [open, setOpen] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [query, setQuery] = useState("")
   const [subtab, setSubtab] = useState<ReplaySubtab>("submissions")
 
@@ -458,7 +479,7 @@ export function ReplaysTab({
         <div className="flex items-center gap-2">
           <HeaderSearch onChange={setQuery} context="replays" />
           {canSubmit ? (
-            <Dialog open={open} onOpenChange={setOpen}>
+            <Dialog open={open} onOpenChange={(next) => { if (!submitting) setOpen(next) }}>
               <DialogTrigger render={<Button />}>
                 <IconUpload />
                 Submit
@@ -466,6 +487,7 @@ export function ReplaysTab({
               <DialogContent className="w-fit min-w-[min(24rem,calc(100%-2rem))] max-w-[min(42rem,calc(100%-2rem))] py-8">
                 <ReplaySubmitForm
                   skins={skins}
+                  onSubmittingChange={setSubmitting}
                   onSubmit={async (input, file) => {
                     await onSubmit(input, file)
                     setOpen(false)

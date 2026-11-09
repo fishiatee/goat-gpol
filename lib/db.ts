@@ -208,6 +208,7 @@ function migrate(db: Database) {
   db.run("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)")
   db.run("CREATE INDEX IF NOT EXISTS idx_replays_created_at ON replays(created_at DESC)")
   db.run("CREATE INDEX IF NOT EXISTS idx_replays_osu_id ON replays(osu_id)")
+  db.run("CREATE INDEX IF NOT EXISTS idx_replays_duplicate ON replays(beatmap_checksum, score_date)")
   db.run("CREATE INDEX IF NOT EXISTS idx_judgments_replay_id ON judgments(replay_id)")
   db.run("CREATE INDEX IF NOT EXISTS idx_skins_osu_id ON skins(osu_id)")
 }
@@ -330,10 +331,11 @@ export function insertSkin(
   name: string,
   rulesets: string,
   scrollSpeed: number | null,
+  filePath = "",
 ): number {
   const result = getDb().run(
-    "INSERT INTO skins (osu_id, name, rulesets, scroll_speed, created_at) VALUES (?, ?, ?, ?, ?)",
-    [osuId, name, rulesets, scrollSpeed, Date.now()],
+    "INSERT INTO skins (osu_id, name, rulesets, scroll_speed, file_path, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+    [osuId, name, rulesets, scrollSpeed, filePath, Date.now()],
   )
   return Number(result.lastInsertRowid)
 }
@@ -379,6 +381,12 @@ export function listSkinsByUser(osuId: number): SkinWithUploader[] {
      WHERE s.osu_id = ?
      ORDER BY s.created_at DESC`,
   ).all(osuId)
+}
+
+export function countSkinsByUser(osuId: number): number {
+  return getDb().query<{ count: number }, [number]>(
+    "SELECT COUNT(*) AS count FROM skins WHERE osu_id = ?",
+  ).get(osuId)?.count ?? 0
 }
 
 export function listSkins(): SkinWithUploader[] {
@@ -478,7 +486,7 @@ export type NewReplay = {
   }
 }
 
-export function insertReplay(input: NewReplay): number {
+export function insertReplay(input: NewReplay, filePath = ""): number {
   const result = getDb().run(
      `INSERT INTO replays (
        osu_id, file_path, file_name, notes, skin_name, status, ruleset,
@@ -493,7 +501,7 @@ export function insertReplay(input: NewReplay): number {
      ) VALUES (?, ?, ?, ?, ?, 'pool', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.osuId,
-      "",
+      filePath,
       input.fileName,
       input.notes,
       input.skinName,
@@ -540,14 +548,16 @@ export function findDuplicateReplay(
   if (scoreOsuId !== null) {
     return getDb().query<
       ReplayWithSubmitter,
-      [string, number, number]
+      [string, number, string, number]
     >(
       `SELECT r.*, u.username AS submitter_username
        FROM replays r
        JOIN users u ON u.osu_id = r.osu_id
-       WHERE r.beatmap_checksum = ? AND r.score_osu_id = ? AND r.score_date = ?
+       WHERE r.beatmap_checksum = ?
+         AND (r.score_osu_id = ? OR (r.score_osu_id IS NULL AND r.score_username = ? COLLATE NOCASE))
+         AND r.score_date = ?
        LIMIT 1`,
-    ).get(beatmapChecksum, scoreOsuId, scoreDate)
+    ).get(beatmapChecksum, scoreOsuId, scoreUsername, scoreDate)
   }
   return getDb().query<ReplayWithSubmitter, [string, string, number]>(
     `SELECT r.*, u.username AS submitter_username
