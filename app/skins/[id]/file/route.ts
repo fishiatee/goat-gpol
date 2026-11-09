@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises"
 import { NextRequest } from "next/server"
 
-import { getSkinById } from "@/lib/db"
+import { getSkinById, getUserByOsuId } from "@/lib/db"
+import { skinDownloadDisposition } from "@/lib/downloads"
 import { getSessionUser } from "@/lib/session"
 import { hasPermission } from "@/lib/permissions"
 
@@ -31,7 +32,10 @@ export async function GET(
     return new Response(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/octet-stream",
-        "Content-Disposition": `attachment; filename="skin-${skin.id}.osk"`,
+        "Content-Disposition": skinDownloadDisposition(
+          getUserByOsuId(skin.osu_id)?.username ?? String(skin.osu_id),
+          skin.name,
+        ),
       },
     })
   } catch {
