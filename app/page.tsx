@@ -7,6 +7,7 @@ import {
   replayRowToApi,
 } from "@/lib/db"
 import { getSessionUser } from "@/lib/session"
+import { userPermissions } from "@/lib/permissions"
 
 export default async function HomePage({
   searchParams,
@@ -28,6 +29,7 @@ export default async function HomePage({
         avatarUrl: user.avatar_url,
         countryCode: user.country_code,
         role: user.role,
+        permissions: userPermissions(user),
         bannedAt: user.banned_at,
       }}
       initialReplays={listReplaysByUser(user.osu_id).map((r) =>

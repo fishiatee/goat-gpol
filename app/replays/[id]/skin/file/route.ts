@@ -3,7 +3,7 @@ import { NextRequest } from "next/server"
 
 import { getReplayById, getSkinForReplay } from "@/lib/db"
 import { getSessionUser } from "@/lib/session"
-import { canJudge } from "@/lib/roles"
+import { canAccessReplays } from "@/lib/permissions"
 
 export const dynamic = "force-dynamic"
 
@@ -20,7 +20,7 @@ export async function GET(
   if (!replay) {
     return Response.json({ error: "not found" }, { status: 404 })
   }
-  if (replay.osu_id !== user.osu_id && !canJudge(user.role)) {
+  if (replay.osu_id !== user.osu_id && !canAccessReplays(user)) {
     return Response.json({ error: "forbidden" }, { status: 403 })
   }
   if (!replay.skin_name) {

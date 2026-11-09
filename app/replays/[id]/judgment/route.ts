@@ -11,9 +11,27 @@ import {
   upsertJudgment,
 } from "@/lib/db"
 import { getSessionUser } from "@/lib/session"
-import { canAdmin, canJudge } from "@/lib/roles"
+import { canAccessReplays, hasPermission } from "@/lib/permissions"
+import type { UserRow } from "@/lib/db"
 
 export const dynamic = "force-dynamic"
+
+function votesForViewer(replayId: number, user: UserRow) {
+  return listJudgments(replayId).map((row, index) => {
+    const vote = judgmentToApi(row)
+    if (row.judge_osu_id === user.osu_id || hasPermission(user, "see_vote_details")) return vote
+    return {
+      ...vote,
+      id: -(index + 1),
+      judgeOsuId: 0,
+      judgeUsername: "???",
+      judgeAvatarUrl: "",
+      comment: "",
+      createdAt: 0,
+      updatedAt: 0,
+    }
+  })
+}
 
 function parseScoreComment(body: unknown): {
   score: number
@@ -43,15 +61,15 @@ export async function GET(
   if (!user) {
     return Response.json({ error: "unauthorized" }, { status: 401 })
   }
-  if (!canJudge(user.role)) {
-    return Response.json({ error: "forbidden" }, { status: 403 })
-  }
   const { id } = await params
   const replay = getReplayById(Number(id))
   if (!replay) {
     return Response.json({ error: "not found" }, { status: 404 })
   }
-  return Response.json(listJudgments(replay.id).map(judgmentToApi))
+  if (replay.osu_id !== user.osu_id && !canAccessReplays(user) && !hasPermission(user, "see_vote_details")) {
+    return Response.json({ error: "forbidden" }, { status: 403 })
+  }
+  return Response.json(votesForViewer(replay.id, user))
 }
 
 export async function PUT(
@@ -62,7 +80,7 @@ export async function PUT(
   if (!user) {
     return Response.json({ error: "unauthorized" }, { status: 401 })
   }
-  if (!canJudge(user.role)) {
+  if (!hasPermission(user, "judge")) {
     return Response.json({ error: "forbidden" }, { status: 403 })
   }
   const { id } = await params
@@ -89,7 +107,7 @@ export async function PATCH(
   if (!user) {
     return Response.json({ error: "unauthorized" }, { status: 401 })
   }
-  if (!canAdmin(user.role)) {
+  if (!hasPermission(user, "manage_replays") || !hasPermission(user, "see_vote_details")) {
     return Response.json({ error: "forbidden" }, { status: 403 })
   }
   const { id } = await params
@@ -110,7 +128,7 @@ export async function PATCH(
     return Response.json({ error: "invalid score or comment" }, { status: 400 })
   }
   updateJudgmentById(judgment.id, replay.id, input.score, input.comment)
-  return Response.json(listJudgments(replay.id).map(judgmentToApi))
+  return Response.json(votesForViewer(replay.id, user))
 }
 
 export async function DELETE(
@@ -121,7 +139,7 @@ export async function DELETE(
   if (!user) {
     return Response.json({ error: "unauthorized" }, { status: 401 })
   }
-  if (!canAdmin(user.role)) {
+  if (!hasPermission(user, "manage_replays") || !hasPermission(user, "see_vote_details")) {
     return Response.json({ error: "forbidden" }, { status: 403 })
   }
   const { id } = await params

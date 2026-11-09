@@ -17,7 +17,7 @@ import {
   type SkinWithUploader,
 } from "@/lib/db"
 import { getSessionUser } from "@/lib/session"
-import { canAdmin } from "@/lib/roles"
+import { hasPermission } from "@/lib/permissions"
 import { SKIN_RULESETS } from "@/lib/skin-upload"
 
 export const dynamic = "force-dynamic"
@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
   }
   const scope = request.nextUrl.searchParams.get("scope") ?? "own"
   if (scope === "all") {
-    if (!canAdmin(user.role)) {
+    if (!hasPermission(user, "manage_skins")) {
       return Response.json({ error: "forbidden" }, { status: 403 })
     }
     return Response.json(listSkins().map(skinToApi))
@@ -102,9 +102,6 @@ export async function POST(request: NextRequest) {
   const user = await getSessionUser()
   if (!user) {
     return Response.json({ error: "unauthorized" }, { status: 401 })
-  }
-  if (user.banned_at !== null) {
-    return Response.json({ error: "banned" }, { status: 403 })
   }
 
   const limits = getSkinLimits()

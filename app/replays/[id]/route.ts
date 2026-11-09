@@ -15,8 +15,7 @@ import {
   sendRenderUploadedWebhook,
 } from "@/lib/discord-webhooks"
 import { getSessionUser } from "@/lib/session"
-import { canAdmin, canJudge } from "@/lib/roles"
-import type { ReplayStatus } from "@/lib/replay-types"
+import { hasPermission } from "@/lib/permissions"
 
 export const dynamic = "force-dynamic"
 
@@ -30,9 +29,6 @@ export async function PATCH(
   const user = await getSessionUser()
   if (!user) {
     return Response.json({ error: "unauthorized" }, { status: 401 })
-  }
-  if (!canJudge(user.role)) {
-    return Response.json({ error: "forbidden" }, { status: 403 })
   }
   const { id } = await params
   const replay = getReplayById(Number(id))
@@ -54,6 +50,13 @@ export async function PATCH(
   }
 
   let attachedVideoUrl: string | null = null
+  if ((body.status !== undefined && !hasPermission(user, "manual_replay_status")) ||
+    ((body.videoUrl !== undefined || body.videoComment !== undefined) && !hasPermission(user, "render"))) {
+    return Response.json({ error: "forbidden" }, { status: 403 })
+  }
+  if (body.status !== undefined && body.status !== "pool" && body.status !== "render") {
+    return Response.json({ error: "invalid status" }, { status: 400 })
+  }
   let attachedVideoComment: string | null = replay.video_comment ?? null
   if (body.videoUrl !== undefined || body.videoComment !== undefined) {
     let videoUrl: string | null = replay.video_url
@@ -120,14 +123,7 @@ export async function PATCH(
   }
 
   if (body.status !== undefined) {
-    if (!canAdmin(user.role)) {
-      return Response.json({ error: "forbidden" }, { status: 403 })
-    }
-    const status = body.status
-    if (status !== "pool" && status !== "render") {
-      return Response.json({ error: "invalid status" }, { status: 400 })
-    }
-    updateReplayStatusManually(replay.id, status as ReplayStatus)
+    updateReplayStatusManually(replay.id, body.status)
   }
 
   const updated = replayToApiForViewer(replay.id, user.osu_id)
@@ -142,7 +138,7 @@ export async function DELETE(
   if (!user) {
     return Response.json({ error: "unauthorized" }, { status: 401 })
   }
-  if (!canAdmin(user.role)) {
+  if (!hasPermission(user, "delete_replays")) {
     return Response.json({ error: "forbidden" }, { status: 403 })
   }
   const { id } = await params

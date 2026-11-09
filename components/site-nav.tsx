@@ -3,7 +3,7 @@
 import { LogoutButton } from "@/components/logout-button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
-import { canAdmin, canJudge } from "@/lib/roles"
+import { canManage, hasPermission } from "@/lib/permissions"
 import type { SessionUser, Tab } from "@/components/app-shell"
 
 export function SiteNav({
@@ -19,10 +19,13 @@ export function SiteNav({
     { id: "replays", label: "Replays" },
     { id: "skins", label: "Skins" },
   ]
-  if (canJudge(user.role)) {
-    tabs.push({ id: "judge", label: "Judge" }, { id: "render", label: "Render" })
+  if (hasPermission(user, "judge")) {
+    tabs.push({ id: "judge", label: "Judge" })
   }
-  if (canAdmin(user.role)) {
+  if (hasPermission(user, "render")) {
+    tabs.push({ id: "render", label: "Render" })
+  }
+  if (canManage(user)) {
     tabs.push({ id: "manage", label: "Manage" })
   }
 

@@ -12,7 +12,7 @@ import {
   sendReplayTestWebhook,
 } from "@/lib/discord-webhooks"
 import { getSessionUser } from "@/lib/session"
-import { canAdmin } from "@/lib/roles"
+import { hasPermission } from "@/lib/permissions"
 
 export const dynamic = "force-dynamic"
 
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   if (!user) {
     return Response.json({ error: "unauthorized" }, { status: 401 })
   }
-  if (!canAdmin(user.role)) {
+  if (!hasPermission(user, "manage_webhooks")) {
     return Response.json({ error: "forbidden" }, { status: 403 })
   }
   const body = (await request.json().catch(() => null)) as {

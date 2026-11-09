@@ -3,7 +3,7 @@ import { NextRequest } from "next/server"
 
 import { deleteSkin, getSkinById } from "@/lib/db"
 import { getSessionUser } from "@/lib/session"
-import { canAdmin } from "@/lib/roles"
+import { hasPermission } from "@/lib/permissions"
 
 export const dynamic = "force-dynamic"
 
@@ -20,7 +20,7 @@ export async function DELETE(
   if (!skin) {
     return Response.json({ error: "not found" }, { status: 404 })
   }
-  if (skin.osu_id !== user.osu_id && !canAdmin(user.role)) {
+  if (skin.osu_id !== user.osu_id && !hasPermission(user, "delete_skins")) {
     return Response.json({ error: "forbidden" }, { status: 403 })
   }
   deleteSkin(skin.id)

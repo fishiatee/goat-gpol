@@ -18,7 +18,7 @@ import {
 } from "@/lib/discord-webhooks"
 import { withUserApi, ReauthenticationRequiredError } from "@/lib/auth"
 import { getSessionUser } from "@/lib/session"
-import { canAdmin, canJudge } from "@/lib/roles"
+import { hasPermission, isManager } from "@/lib/permissions"
 import type { ReplayMetadata } from "@/lib/replay-types"
 
 export const dynamic = "force-dynamic"
@@ -96,14 +96,14 @@ export async function GET(request: NextRequest) {
     )
   }
   if (scope === "judge" || scope === "render") {
-    if (!canJudge(user.role)) {
+    if (!hasPermission(user, scope === "judge" ? "judge" : "render")) {
       return Response.json({ error: "forbidden" }, { status: 403 })
     }
     const rows = listReplays(scope === "render" ? "render" : "pool")
     return Response.json(rows.map((r) => replayRowToApi(r, user.osu_id)))
   }
   if (scope === "all") {
-    if (!canAdmin(user.role)) {
+    if (!hasPermission(user, "manage_replays")) {
       return Response.json({ error: "forbidden" }, { status: 403 })
     }
     const rows = listReplays()
@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
   if (!user) {
     return Response.json({ error: "unauthorized" }, { status: 401 })
   }
-  if (user.banned_at !== null) {
+  if (user.banned_at !== null && !isManager(user)) {
     return Response.json({ error: "banned" }, { status: 403 })
   }
   const form = await request.formData()

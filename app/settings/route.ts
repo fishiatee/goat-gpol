@@ -11,7 +11,7 @@ import {
 } from "@/lib/db"
 import { isValidWebhookUrl } from "@/lib/discord-webhooks"
 import { getSessionUser } from "@/lib/session"
-import { canAdmin } from "@/lib/roles"
+import { hasPermission, type PermissionUser } from "@/lib/permissions"
 import type {
   AppSettings,
   JudgeSettings,
@@ -145,8 +145,12 @@ function parseSettings(
   return out
 }
 
-function currentSettings(): AppSettings {
-  return { ...getJudgeSettings(), ...getSkinLimits(), ...getWebhookSettings() }
+function currentSettings(user: PermissionUser): Partial<AppSettings> {
+  return {
+    ...getJudgeSettings(),
+    ...getSkinLimits(),
+    ...(hasPermission(user, "manage_webhooks") ? getWebhookSettings() : {}),
+  }
 }
 
 export async function GET() {
@@ -154,10 +158,11 @@ export async function GET() {
   if (!user) {
     return Response.json({ error: "unauthorized" }, { status: 401 })
   }
-  if (!canAdmin(user.role)) {
+  if (!["manage_thresholds", "manage_skins", "manage_webhooks"].some((permission) =>
+    hasPermission(user, permission as "manage_thresholds" | "manage_skins" | "manage_webhooks"))) {
     return Response.json({ error: "forbidden" }, { status: 403 })
   }
-  return Response.json(currentSettings())
+  return Response.json(currentSettings(user))
 }
 
 export async function PATCH(request: NextRequest) {
@@ -165,12 +170,16 @@ export async function PATCH(request: NextRequest) {
   if (!user) {
     return Response.json({ error: "unauthorized" }, { status: 401 })
   }
-  if (!canAdmin(user.role)) {
-    return Response.json({ error: "forbidden" }, { status: 403 })
-  }
   const input = parseSettings(await request.json().catch(() => null))
   if (!input) {
     return Response.json({ error: "invalid settings" }, { status: 400 })
+  }
+  if (Object.keys(input).length === 0 || Object.keys(input).some((key) => {
+    const permission = key.startsWith("threshold") ? "manage_thresholds"
+      : key.startsWith("max") ? "manage_skins" : "manage_webhooks"
+    return !hasPermission(user, permission)
+  })) {
+    return Response.json({ error: "forbidden" }, { status: 403 })
   }
   const judgeInput: Partial<JudgeSettings> = {}
   if (input.thresholdScore !== undefined) {
@@ -215,5 +224,5 @@ export async function PATCH(request: NextRequest) {
   if (Object.keys(webhookInput).length > 0) {
     updateWebhookSettings(webhookInput)
   }
-  return Response.json(currentSettings())
+  return Response.json(currentSettings(user))
 }

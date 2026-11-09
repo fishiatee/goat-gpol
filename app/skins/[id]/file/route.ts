@@ -3,7 +3,7 @@ import { NextRequest } from "next/server"
 
 import { getSkinById } from "@/lib/db"
 import { getSessionUser } from "@/lib/session"
-import { canAdmin } from "@/lib/roles"
+import { hasPermission } from "@/lib/permissions"
 
 export const dynamic = "force-dynamic"
 
@@ -20,7 +20,7 @@ export async function GET(
   if (!skin) {
     return Response.json({ error: "not found" }, { status: 404 })
   }
-  if (skin.osu_id !== user.osu_id && !canAdmin(user.role)) {
+  if (skin.osu_id !== user.osu_id && !hasPermission(user, "manage_skins")) {
     return Response.json({ error: "forbidden" }, { status: 403 })
   }
   if (!skin.file_path) {

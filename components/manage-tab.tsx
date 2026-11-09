@@ -24,14 +24,6 @@ import {
 import { Slider } from "@/components/ui/slider"
 import { ReplayCard } from "@/components/replay-card"
 import { RulesetIcon } from "@/components/ruleset-icons"
-import {
-  Select,
-  SelectItem,
-  SelectItemText,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { VotingStatsDialog } from "@/components/voting-stats-dialog"
@@ -52,7 +44,7 @@ import {
 } from "@tabler/icons-react"
 import type { Icon } from "@tabler/icons-react"
 import { cn } from "@/lib/utils"
-import { isManager } from "@/lib/roles"
+import { hasPermission, isManager, MANAGE_PERMISSIONS, PERMISSIONS, type Permission } from "@/lib/permissions"
 import {
   replayFromApi,
   type SessionUser,
@@ -74,6 +66,7 @@ type ManageUser = {
   username: string
   avatarUrl: string
   role: "basic" | "judge" | "admin" | "manager"
+  permissions: Permission[]
   bannedAt: number | null
 }
 
@@ -87,47 +80,82 @@ const MANAGE_SECTIONS: { id: ManageSection; label: string; icon: Icon }[] = [
   { id: "webhooks", label: "Webhooks", icon: IconWebhook },
 ]
 
-function RoleSelect({
+function PermissionsDialog({
   user,
   actor,
   onChange,
 }: {
   user: ManageUser
   actor: SessionUser
-  onChange: (role: string) => void
+  onChange: (permissions: Permission[]) => Promise<void>
 }) {
-  const isManagerTarget = user.role === "manager"
-  const canChangeAdmin = isManager(actor.role)
-  const isSelf = user.osuId === actor.osuId
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState(user.permissions)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const disabled =
-    isSelf || isManagerTarget || (user.role === "admin" && !canChangeAdmin)
+    user.osuId === actor.osuId || isManager(user) ||
+    !hasPermission(actor, "site_administration") ||
+    (user.permissions.includes("site_administration") && !isManager(actor))
 
-  if (isManagerTarget) {
+  if (isManager(user)) {
     return <span className="text-xs font-medium">manager</span>
   }
   return (
-    <Select
-      value={user.role}
-      disabled={disabled}
-      onValueChange={(value) => onChange(value ?? "")}
-    >
-      <SelectTrigger className="h-8 w-28 text-xs">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectPopup>
-        <SelectItem value="basic">
-          <SelectItemText>basic</SelectItemText>
-        </SelectItem>
-        <SelectItem value="judge">
-          <SelectItemText>judge</SelectItemText>
-        </SelectItem>
-        {canChangeAdmin && (
-          <SelectItem value="admin">
-            <SelectItemText>admin</SelectItemText>
-          </SelectItem>
-        )}
-      </SelectPopup>
-    </Select>
+    <Dialog open={open} onOpenChange={(next) => {
+      if (saving) return
+      setOpen(next)
+      if (next) {
+        setDraft(user.permissions)
+        setError(null)
+      }
+    }}>
+      <DialogTrigger render={<Button variant="outline" size="icon-sm" disabled={disabled} aria-label="Permissions" title="Permissions" />}>
+        <IconSettings />
+      </DialogTrigger>
+      <DialogContent>
+        <form
+          className="flex flex-col gap-5"
+          onSubmit={async (event) => {
+            event.preventDefault()
+            if (saving) return
+            setSaving(true)
+            setError(null)
+            try {
+              await onChange(draft)
+              setOpen(false)
+            } catch {
+              setError("Could not change the user's permissions.")
+            } finally {
+              setSaving(false)
+            }
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Permissions for {user.username}</DialogTitle>
+          </DialogHeader>
+          <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
+            {(Object.entries(PERMISSIONS) as [Permission, string][]).map(([permission, label]) => (
+              <label key={permission} className="flex cursor-pointer items-center gap-2 text-sm font-medium has-disabled:cursor-default has-disabled:opacity-50">
+                <input
+                  type="checkbox"
+                  className="size-4 shrink-0 accent-primary"
+                  checked={draft.includes(permission)}
+                  disabled={saving || (permission === "site_administration" ? !isManager(actor) : !hasPermission(actor, permission))}
+                  onChange={(event) => setDraft((previous) => event.target.checked
+                    ? [...previous, permission] : previous.filter((value) => value !== permission))}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          <DialogFooter>
+            {error && <p className="text-sm text-destructive sm:mr-auto sm:self-center">{error}</p>}
+            <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Apply"}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -159,7 +187,7 @@ function ThresholdsPanel({
           <span className="font-medium text-foreground">
             more than {settings?.thresholdPercent ?? 50}%
           </span>{" "}
-          of all judges (users with Judge, Admin or Manager level) score it above{" "}
+          of all users allowed to judge score it above{" "}
           <span className="font-medium text-foreground">
             {settings?.thresholdScore ?? 3}
           </span>
@@ -207,12 +235,12 @@ function ThresholdsPanel({
 function UsersPanel({
   users,
   actor,
-  onChangeRole,
+  onChangePermissions,
   onToggleBan,
 }: {
   users: ManageUser[]
   actor: SessionUser
-  onChangeRole: (user: ManageUser, role: string) => void
+  onChangePermissions: (user: ManageUser, permissions: Permission[]) => Promise<void>
   onToggleBan: (user: ManageUser) => void
 }) {
   return (
@@ -234,12 +262,12 @@ function UsersPanel({
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <RoleSelect
+                <PermissionsDialog
                   user={u}
                   actor={actor}
-                  onChange={(role) => onChangeRole(u, role)}
+                  onChange={(permissions) => onChangePermissions(u, permissions)}
                 />
-                {u.role !== "manager" && (
+                {u.role !== "manager" && hasPermission(actor, "ban_users") && (
                   <Tooltip>
                     <TooltipTrigger
                       render={
@@ -248,7 +276,7 @@ function UsersPanel({
                           size="icon-sm"
                           disabled={
                             u.osuId === actor.osuId ||
-                            (u.role === "admin" && !isManager(actor.role))
+                            (u.permissions.includes("site_administration") && !isManager(actor))
                           }
                           onClick={() => onToggleBan(u)}
                         />
@@ -337,10 +365,12 @@ function RemoveReplayDialog({
 
 function ReplaysPanel({
   replays,
+  user,
   onChangeStatus,
   onRemove,
 }: {
   replays: Replay[]
+  user: SessionUser
   onChangeStatus: (replay: Replay, status: "pool" | "render") => void
   onRemove: (replay: Replay) => Promise<void>
 }) {
@@ -393,7 +423,7 @@ function ReplaysPanel({
                 showSubmitter
               actions={
                 <>
-                  {replay.state !== "uploaded" && (
+                  {replay.state !== "uploaded" && hasPermission(user, "manual_replay_status") && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -408,7 +438,7 @@ function ReplaysPanel({
                     </Button>
                   )}
                   <VotingStatsDialog replay={replay} />
-                  <RemoveReplayDialog replay={replay} onRemove={onRemove} />
+                  {hasPermission(user, "delete_replays") && <RemoveReplayDialog replay={replay} onRemove={onRemove} />}
                 </>
               }
             />
@@ -863,10 +893,12 @@ function WebhooksPanel({
 
 function SkinsPanel({
   skins,
+  user,
   limitsSection,
   onRemove,
 }: {
   skins: Skin[]
+  user: SessionUser
   limitsSection: ReactNode
   onRemove: (skin: Skin) => Promise<void>
 }) {
@@ -945,7 +977,7 @@ function SkinsPanel({
                 >
                   <IconDownload />
                 </Button>
-                <RemoveSkinDialog skin={skin} onRemove={onRemove} />
+                {(skin.submitter.osuId === user.osuId || hasPermission(user, "delete_skins")) && <RemoveSkinDialog skin={skin} onRemove={onRemove} />}
               </div>
             </div>
           ))
@@ -956,7 +988,9 @@ function SkinsPanel({
 }
 
 export function ManageTab({ user }: { user: SessionUser }) {
-  const [section, setSection] = useState<ManageSection>("thresholds")
+  const allowedSections = MANAGE_SECTIONS.filter((section) => hasPermission(user, MANAGE_PERMISSIONS[section.id]))
+  const [section, setSection] = useState<ManageSection>(() => allowedSections[0]?.id ?? "thresholds")
+  const activeSection = allowedSections.some((entry) => entry.id === section) ? section : allowedSections[0]?.id
   const [users, setUsers] = useState<ManageUser[]>([])
   const [replays, setReplays] = useState<Replay[]>([])
   const [skins, setSkins] = useState<Skin[]>([])
@@ -980,17 +1014,17 @@ export function ManageTab({ user }: { user: SessionUser }) {
   useEffect(() => {
     let cancelled = false
     Promise.all([
-      fetch("/users"),
-      fetch("/replays?scope=all"),
-      fetch("/settings"),
-      fetch("/skins?scope=all"),
+      hasPermission(user, "manage_users") ? fetch("/users") : null,
+      hasPermission(user, "manage_replays") ? fetch("/replays?scope=all") : null,
+      ["manage_thresholds", "manage_skins", "manage_webhooks"].some((permission) => hasPermission(user, permission as Permission)) ? fetch("/settings") : null,
+      hasPermission(user, "manage_skins") ? fetch("/skins?scope=all") : null,
     ])
       .then(([usersRes, replaysRes, settingsRes, skinsRes]) =>
         Promise.all([
-          usersRes.ok ? usersRes.json() : [],
-          replaysRes.ok ? replaysRes.json() : [],
-          settingsRes.ok ? settingsRes.json() : null,
-          skinsRes.ok ? skinsRes.json() : [],
+          usersRes?.ok ? usersRes.json() : [],
+          replaysRes?.ok ? replaysRes.json() : [],
+          settingsRes?.ok ? settingsRes.json() : null,
+          skinsRes?.ok ? skinsRes.json() : [],
         ]),
       )
       .then(([usersData, replaysData, settingsData, skinsData]) => {
@@ -1020,7 +1054,7 @@ export function ManageTab({ user }: { user: SessionUser }) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [user])
 
   const saveSettings = async () => {
     const body: Partial<JudgeSettings> = {}
@@ -1047,7 +1081,7 @@ export function ManageTab({ user }: { user: SessionUser }) {
       setSettings(updated)
       setScoreDraft(String(updated.thresholdScore))
       setPercentDraft(String(updated.thresholdPercent))
-      await refreshReplays()
+      if (hasPermission(user, "manage_replays")) await refreshReplays()
     } catch {
       setSettingsError("Could not save the thresholds.")
     } finally {
@@ -1070,15 +1104,14 @@ export function ManageTab({ user }: { user: SessionUser }) {
     [],
   )
 
-  const changeUserRole = async (target: ManageUser, role: string) => {
+  const changeUserPermissions = async (target: ManageUser, permissions: Permission[]) => {
     const res = await fetch("/users", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ osuId: target.osuId, role }),
+      body: JSON.stringify({ osuId: target.osuId, permissions }),
     })
     if (!res.ok) {
-      window.alert("Could not change the user's role.")
-      return
+      throw new Error("save-failed")
     }
     const updated = (await res.json()) as ManageUser
     setUsers((prev) => prev.map((u) => (u.osuId === updated.osuId ? updated : u)))
@@ -1152,15 +1185,15 @@ export function ManageTab({ user }: { user: SessionUser }) {
       ) : (
         <div className="grid md:grid-cols-[200px_1fr] md:items-start">
           <nav className="flex flex-col gap-1 pb-6 md:sticky md:top-20 md:border-r md:pb-0 md:pr-8">
-            {MANAGE_SECTIONS.map((s) => (
+            {allowedSections.map((s) => (
               <button
                 key={s.id}
                 type="button"
                 onClick={() => setSection(s.id)}
-                aria-pressed={section === s.id}
+                aria-pressed={activeSection === s.id}
                 className={cn(
                   "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                  section === s.id
+                  activeSection === s.id
                     ? "bg-muted text-foreground"
                     : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                 )}
@@ -1172,7 +1205,7 @@ export function ManageTab({ user }: { user: SessionUser }) {
           </nav>
 
           <div className="min-w-0 md:pl-8">
-            {section === "thresholds" && (
+            {activeSection === "thresholds" && (
               <ThresholdsPanel
                 settings={settings}
                 scoreDraft={scoreDraft}
@@ -1184,24 +1217,26 @@ export function ManageTab({ user }: { user: SessionUser }) {
                 error={settingsError}
               />
             )}
-            {section === "users" && (
+            {activeSection === "users" && (
               <UsersPanel
                 users={users}
                 actor={user}
-                onChangeRole={changeUserRole}
+                onChangePermissions={changeUserPermissions}
                 onToggleBan={toggleBan}
               />
             )}
-            {section === "replays" && (
+            {activeSection === "replays" && (
               <ReplaysPanel
                 replays={replays}
+                user={user}
                 onChangeStatus={setReplayStatus}
                 onRemove={removeReplay}
               />
             )}
-            {section === "skins" && (
+            {activeSection === "skins" && (
               <SkinsPanel
                 skins={skins}
+                user={user}
                 limitsSection={
                   <SkinLimitsSection
                     limits={settings}
@@ -1211,7 +1246,7 @@ export function ManageTab({ user }: { user: SessionUser }) {
                 onRemove={removeSkin}
               />
             )}
-            {section === "webhooks" && (
+            {activeSection === "webhooks" && (
               <WebhooksPanel settings={settings} onUpdate={setSettings} />
             )}
           </div>

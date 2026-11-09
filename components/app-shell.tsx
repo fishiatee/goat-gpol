@@ -8,7 +8,7 @@ import { RenderTab } from "@/components/render-tab"
 import { ReplaysTab } from "@/components/replays-tab"
 import { SiteNav } from "@/components/site-nav"
 import { SkinsTab } from "@/components/skins-tab"
-import { canAdmin, canJudge } from "@/lib/roles"
+import { canManage, hasPermission, isManager, type Permission } from "@/lib/permissions"
 import type { SkinLimits } from "@/lib/judging"
 import {
   uploadSkin,
@@ -26,6 +26,7 @@ export type SessionUser = {
   avatarUrl: string
   countryCode: string
   role: Role
+  permissions: Permission[]
   bannedAt: number | null
 }
 
@@ -221,7 +222,7 @@ export function AppShell({
     setReplays((prev) => [replayFromApi(created), ...prev])
   }
 
-  const canSubmit = user.bannedAt === null
+  const canSubmit = user.bannedAt === null || isManager(user)
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -244,15 +245,15 @@ export function AppShell({
           <SkinsTab
             skins={skins}
             onUpload={addSkin}
-            canSubmit={canSubmit}
+            canSubmit
             skinLimits={limits}
           />
         )}
-        {tab === "judge" && canJudge(user.role) && (
+        {tab === "judge" && hasPermission(user, "judge") && (
           <JudgeTab userOsuId={user.osuId} />
         )}
-        {tab === "render" && canJudge(user.role) && <RenderTab />}
-        {tab === "manage" && canAdmin(user.role) && <ManageTab user={user} />}
+        {tab === "render" && hasPermission(user, "render") && <RenderTab />}
+        {tab === "manage" && canManage(user) && <ManageTab user={user} />}
       </main>
     </div>
   )

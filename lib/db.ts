@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite"
 import { mkdirSync } from "node:fs"
 import path from "node:path"
+import { hasPermission, legacyPermissions, userPermissions, type Permission } from "@/lib/permissions"
 import type {
   JudgmentApi,
   ReplayApi,
@@ -27,6 +28,7 @@ export type UserRow = {
   refresh_token: string | null
   token_expires_at: number | null
   role: Role
+  permissions: string
   banned_at: number | null
   created_at: number
   updated_at: number
@@ -155,6 +157,29 @@ function migrate(db: Database) {
     );
   `)
   ensureColumn(db, "users", "role", "role TEXT NOT NULL DEFAULT 'basic'")
+  if (!columnExists(db, "users", "permissions")) {
+    db.transaction(() => {
+      ensureColumn(db, "users", "permissions", "permissions TEXT NOT NULL DEFAULT '[]'")
+      for (const role of ["basic", "judge", "admin", "manager"] as Role[]) {
+        db.run("UPDATE users SET permissions = ? WHERE role = ?", [JSON.stringify(legacyPermissions(role)), role])
+      }
+    })()
+  }
+  db.transaction(() => {
+    const migrationKey = "permissions_manual_replay_status_v1"
+    if (db.query("SELECT 1 FROM settings WHERE key = ?").get(migrationKey)) return
+    const users = db.query<Pick<UserRow, "osu_id" | "role" | "permissions">, []>(
+      "SELECT osu_id, role, permissions FROM users",
+    ).all()
+    for (const user of users) {
+      const permissions = userPermissions(user)
+      if (permissions.includes("manage_replays") && !permissions.includes("manual_replay_status")) {
+        permissions.push("manual_replay_status")
+      }
+      db.run("UPDATE users SET permissions = ? WHERE osu_id = ?", [JSON.stringify(permissions), user.osu_id])
+    }
+    db.run("INSERT INTO settings (key, value) VALUES (?, '1')", [migrationKey])
+  })()
   ensureColumn(db, "users", "banned_at", "banned_at INTEGER")
   ensureColumn(db, "replays", "status", "status TEXT NOT NULL DEFAULT 'pool'")
   ensureColumn(db, "replays", "manual", "manual INTEGER NOT NULL DEFAULT 0")
@@ -267,10 +292,17 @@ export function syncManagerRole(osuId: number) {
 }
 
 export function setUserRole(osuId: number, role: Role) {
-  getDb().run("UPDATE users SET role = ?, updated_at = ? WHERE osu_id = ?", [
+  getDb().run("UPDATE users SET role = ?, permissions = ?, updated_at = ? WHERE osu_id = ?", [
     role,
+    JSON.stringify(legacyPermissions(role)),
     Date.now(),
     osuId,
+  ])
+}
+
+export function setUserPermissions(osuId: number, permissions: Permission[]) {
+  getDb().run("UPDATE users SET permissions = ?, updated_at = ? WHERE osu_id = ?", [
+    JSON.stringify(permissions), Date.now(), osuId,
   ])
 }
 
@@ -840,10 +872,7 @@ export function updateWebhookSettings(partial: Partial<WebhookSettings>) {
 }
 
 export function countEligibleJudges(): number {
-  const row = getDb().query<{ count: number }, []>(
-    "SELECT COUNT(*) AS count FROM users WHERE role IN ('judge', 'admin', 'manager')",
-  ).get()
-  return row?.count ?? 0
+  return listUsers().filter((user) => hasPermission(user, "judge")).length
 }
 
 export function recomputeReplayStatus(replayId: number) {
